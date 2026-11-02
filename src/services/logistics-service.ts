@@ -45,9 +45,11 @@ export class LogisticsService {
   async listShipments(): Promise<{ today: IsoDate; shipments: ShipmentRow[] }> {
     const snap = await this.snapshot();
     const byEntity = groupRisks(snap.risks);
+    // Most severe risk first, then shipments without risk; each group by planned arrival.
+    const rank = (r: ShipmentRow) => (r.topSeverity ? SEVERITIES.indexOf(r.topSeverity) : SEVERITIES.length);
     const shipments = snap.shipments
       .map((s) => toShipmentRow(s, byEntity.get(s.id) ?? []))
-      .sort((a, b) => a.plannedArrival.localeCompare(b.plannedArrival) || a.id.localeCompare(b.id));
+      .sort((a, b) => rank(a) - rank(b) || a.plannedArrival.localeCompare(b.plannedArrival) || a.id.localeCompare(b.id));
     return { today: snap.today, shipments };
   }
 

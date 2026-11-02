@@ -9,7 +9,7 @@ import {
 } from './types';
 
 /** Bump whenever a rule's condition or severity thresholds change. */
-export const RULE_VERSION = '1.0.0';
+export const RULE_VERSION = '1.1.0';
 /** Inbound shipments arriving within this many days count towards available stock. */
 export const INBOUND_WINDOW_DAYS = 7;
 
@@ -88,10 +88,11 @@ export function evaluateRisks(shipments: Shipment[], inventory: InventoryItem[],
   const windowEnd = addDays(today, INBOUND_WINDOW_DAYS);
   for (const item of inventory) {
     const position = stockPosition(item, shipments, today, windowEnd);
-    if (position.projected >= item.safetyStock) continue;
+    // Nothing available today is a stock-out even if inbound will cover it later.
+    const stockOut = position.available <= 0;
+    if (!stockOut && position.projected >= item.safetyStock) continue;
     const entityKey = `${item.sku}@${item.warehouse}`;
-    const severity: Severity =
-      position.available <= 0 ? 'critical' : position.projected < item.safetyStock / 2 ? 'high' : 'medium';
+    const severity: Severity = stockOut ? 'critical' : position.projected < item.safetyStock / 2 ? 'high' : 'medium';
     risks.push({
       ...base,
       id: `LOW_STOCK:${entityKey}`,
@@ -99,7 +100,9 @@ export function evaluateRisks(shipments: Shipment[], inventory: InventoryItem[],
       severity,
       entityType: 'inventory',
       entityKey,
-      title: `${item.sku} at ${item.warehouse} is below safety stock`,
+      title: stockOut
+        ? `${item.sku} at ${item.warehouse} has no available stock`
+        : `${item.sku} at ${item.warehouse} is below safety stock`,
       evidence: [
         { label: 'On hand', value: item.onHand },
         { label: 'Reserved', value: item.reserved },

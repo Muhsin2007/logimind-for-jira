@@ -74,6 +74,13 @@ describe('LOW_STOCK', () => {
     const risks = types([ship({ qty: 6, plannedArrival: '2026-11-01', eta: '2026-11-03' })], [item]);
     expect(risks).toContain('LOW_STOCK:high');
   });
+  it('flags a stock-out today as critical even when inbound covers safety stock', () => {
+    const item = inv({ onHand: 12, reserved: 12, safetyStock: 50 });
+    const risks = evaluateRisks([ship({ qty: 140, plannedArrival: '2026-11-06', eta: '2026-11-06' })], [item], TODAY);
+    expect(risks.map((r) => [r.type, r.severity, r.title])).toEqual([
+      ['LOW_STOCK', 'critical', 'SKU-1 at W has no available stock'],
+    ]);
+  });
   it('only counts inbound for the same SKU and warehouse', () => {
     const item = inv({ onHand: 4, safetyStock: 10 });
     expect(types([ship({ qty: 50, warehouse: 'Other' })], [item])).toEqual(['LOW_STOCK:high']);
