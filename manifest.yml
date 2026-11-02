@@ -5,6 +5,13 @@ modules:
       resolver:
         function: resolver
       title: LogiMind
+  jira:issueContext:
+    - key: logimind-issue-context
+      resource: main
+      resolver:
+        function: resolver
+      title: LogiMind
+      label: LogiMind risk
   function:
     - key: resolver
       handler: index.handler
@@ -18,5 +25,7 @@ app:
 permissions:
   scopes:
     - storage:app
-    # Only for the server-side ADMINISTER check on data-changing actions (GET /rest/api/3/mypermissions).
+    # ADMINISTER check (mypermissions), project/issue-type lists, issue status search.
     - read:jira-work
+    # Creating an issue from a risk, as the user who clicks "Create Jira issue".
+    - write:jira-work

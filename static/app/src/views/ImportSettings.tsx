@@ -3,6 +3,7 @@ import { call, errorMessage, useAsync, type ImportOutcome } from '../api';
 import { ErrorState, Loading, Panel } from '../components';
 import { fmtDateTime } from '../format';
 import type { NavProps } from '../App';
+import { JiraSettings } from './JiraSettings';
 
 const MAX_BYTES = 1_000_000;
 
@@ -103,7 +104,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
               </button>
             ) : (
               <span className="confirm" role="group" aria-label="Confirm delete">
-                <span>Delete all shipments, inventory and import history?</span>
+                <span>Delete all shipments, inventory, import history and risk-to-issue links? Jira issues are not deleted.</span>
                 <button type="button" className="btn btn-danger" disabled={busy !== null} onClick={() => run('clear', async () => { await call('clearData'); setOutcomes([]); setConfirmClear(false); })}>
                   {busy === 'clear' ? 'Deleting…' : 'Delete'}
                 </button>
@@ -113,6 +114,8 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           </div>
         </Panel>
       </div>
+
+      {access.status === 'ready' && <JiraSettings canManage={canManage} dataVersion={dataVersion} onDataChanged={onDataChanged} />}
 
       <Panel title="Import history">
         {history.status === 'loading' && <Loading />}

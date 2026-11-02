@@ -3,9 +3,11 @@ import { call, useAsync, type RiskEvent, type Severity } from '../api';
 import { EmptyState, ErrorState, Loading, SeverityBadge } from '../components';
 import { RISK_TYPE_LABEL, SEVERITY_LABEL } from '../format';
 import type { NavProps } from '../App';
+import { IssueAction, useIssueLinks } from '../issues';
 
 export function RiskCenter({ dataVersion, onOpenShipment, onNavigate }: NavProps) {
   const state = useAsync(() => call('listRisks'), [dataVersion]);
+  const issues = useIssueLinks(dataVersion);
   const [severity, setSeverity] = useState<'all' | Severity>('all');
   const [type, setType] = useState<'all' | RiskEvent['type']>('all');
 
@@ -64,10 +66,20 @@ export function RiskCenter({ dataVersion, onOpenShipment, onNavigate }: NavProps
               )}
               <span className="muted small">Rule v{r.ruleVersion}</span>
             </div>
+            <div className="row card-issue">
+              {issues.data ? (
+                <IssueAction risk={r} link={issues.byRisk.get(r.id)} config={issues.data.config} onChanged={issues.state.reload} />
+              ) : issues.state.status === 'error' ? (
+                <span className="text-danger small">Jira links unavailable: {issues.state.message}</span>
+              ) : (
+                <span className="muted small">Loading Jira link…</span>
+              )}
+            </div>
           </li>
         ))}
       </ul>
       {risks.length === 0 && <p className="muted">No risks match these filters.</p>}
+      {issues.data?.statusError && <p className="muted small">Jira status could not be refreshed: {issues.data.statusError}</p>}
     </div>
   );
 }

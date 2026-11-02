@@ -2,9 +2,11 @@ import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'rea
 import { call, useAsync } from '../api';
 import { ErrorState, Facts, Loading, SeverityBadge, StatusBadge } from '../components';
 import { fmtDate, fmtNumber, RISK_TYPE_LABEL } from '../format';
+import { IssueAction, useIssueLinks } from '../issues';
 
 export function ShipmentDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const state = useAsync(() => call('getShipment', { id }), [id]);
+  const issues = useIssueLinks(0);
   const closeButton = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLElement>(null);
 
@@ -76,6 +78,11 @@ export function ShipmentDrawer({ id, onClose }: { id: string; onClose: () => voi
                     <li key={r.id} className="risk-item">
                       <SeverityBadge severity={r.severity} /> <strong>{r.title}</strong>
                       <div className="muted small">{RISK_TYPE_LABEL[r.type]} · <span className="mono">{r.id}</span> · rule v{r.ruleVersion}</div>
+                      {issues.data && (
+                        <div className="row">
+                          <IssueAction risk={r} link={issues.byRisk.get(r.id)} config={issues.data.config} onChanged={issues.state.reload} />
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

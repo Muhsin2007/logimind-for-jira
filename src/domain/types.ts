@@ -86,6 +86,38 @@ export interface ImportBatch {
   errors: RowError[];
 }
 
+/** Where "Create Jira issue" puts new issues; chosen by a Jira administrator. */
+export interface JiraConfig {
+  projectKey: string;
+  projectName: string;
+  issueTypeId: string;
+  issueTypeName: string;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+/** A Jira issue created from a LogiMind risk. One per risk ID. */
+export interface IssueLink {
+  riskId: string;
+  riskType: RiskType;
+  severity: Severity;
+  entityType: RiskEvent['entityType'];
+  entityKey: string;
+  riskTitle: string;
+  issueId: string;
+  issueKey: string;
+  projectKey: string;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+export type StatusCategory = 'new' | 'indeterminate' | 'done' | 'unknown';
+
+export interface IssueStatus {
+  statusName: string;
+  category: StatusCategory;
+}
+
 export interface Kpis {
   shipmentsTotal: number;
   shipmentsOpen: number;
