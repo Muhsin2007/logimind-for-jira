@@ -16,4 +16,5 @@ app:
     name: nodejs24.x
   id: ari:cloud:ecosystem::app/0c416234-e118-4454-907e-04c39eaa2c70
 permissions:
-  scopes: []
+  scopes:
+    - storage:app
