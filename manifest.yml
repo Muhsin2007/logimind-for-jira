@@ -1,0 +1,20 @@
+modules:
+  jira:globalPage:
+    - key: logimind-global-page
+      resource: main
+      resolver:
+        function: resolver
+      title: LogiMind
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/app/build
+app:
+  runtime:
+    name: nodejs24.x
+  # Filled in by `forge register`
+  id: ari:cloud:ecosystem::app/00000000-0000-0000-0000-000000000000
+permissions:
+  scopes: []
