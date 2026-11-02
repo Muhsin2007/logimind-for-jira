@@ -1,7 +1,7 @@
 import Resolver from '@forge/resolver';
 import { canManageData, requireDataManager } from './auth/access';
 import { ForgeJiraGateway } from './jira/forge-jira-gateway';
-import { IssueService, ISSUE_KEY } from './services/issue-service';
+import { IssueService, ISSUE_ID } from './services/issue-service';
 import { LogisticsService } from './services/logistics-service';
 import { KvsIssueLinkRepository } from './storage/kvs-issue-links';
 import { KvsLogisticsRepository } from './storage/kvs-repository';
@@ -17,7 +17,7 @@ function requireString(payload: unknown, field: string, maxLength: number): stri
   return value;
 }
 
-type Context = { accountId?: string; extension?: { issue?: { key?: string } } };
+type Context = { accountId?: string; extension?: { issue?: { id?: string | number; key?: string } } };
 const accountOf = (context: Context | undefined) => context?.accountId ?? null;
 
 // Reads: any user who can open the page.
@@ -36,11 +36,12 @@ resolver.define('createIssueForRisk', ({ payload, context }) =>
   issues.createIssueForRisk(requireString(payload, 'riskId', 200), accountOf(context)),
 );
 
-// The issue sidebar trusts only the issue key from Forge's server-side context, never the payload.
+// The issue sidebar trusts only the issue from Forge's server-side context, never the payload.
 resolver.define('getIssueContext', ({ context }) => {
-  const key = (context as Context | undefined)?.extension?.issue?.key;
-  if (!key || !ISSUE_KEY.test(key)) throw new Error('This view is only available on a Jira issue');
-  return issues.getIssueContext(key);
+  const issue = (context as Context | undefined)?.extension?.issue;
+  const id = issue?.id === undefined ? '' : String(issue.id);
+  if (!ISSUE_ID.test(id)) throw new Error('This view is only available on a Jira issue');
+  return issues.getIssueContext(id, String(issue?.key ?? ''));
 });
 
 // Writes that change site-wide data or settings: Jira administrators only, checked server-side.

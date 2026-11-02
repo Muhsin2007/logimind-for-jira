@@ -1,15 +1,22 @@
+import { createHash } from 'node:crypto';
 import { buildIssueContent } from '../domain/jira-issue';
-import type { IssueLink, JiraConfig, RiskEvent } from '../domain/types';
+import type { IssueLink, JiraConfig, LiveIssue, RiskEvent } from '../domain/types';
 import { JiraError, type JiraGateway, type JiraIssueType, type JiraProject } from '../jira/jira-gateway';
 import type { CreateIssueOutcome, IssueContextData, IssueLinksData, IssueLinkView } from '../shared/api';
 import { RiskBusyError, type IssueLinkRepository } from '../storage/issue-links';
 import type { LogisticsService } from './logistics-service';
 
-/** Jira issue keys look like ABC-123. */
-export const ISSUE_KEY = /^[A-Z][A-Z0-9_]{0,19}-\d{1,9}$/;
+/** Jira issue IDs are numeric; issue keys can change when an issue moves, IDs never do. */
+export const ISSUE_ID = /^\d{1,18}$/;
 const PROJECT_KEY = /^[A-Z][A-Z0-9_]{0,19}$/;
+const LINK_SAVE_ATTEMPTS = 3;
 
 type RiskSource = Pick<LogisticsService, 'listRisks' | 'getShipment'>;
+
+/** Stable per-risk label, so an issue can be found by JQL even if its LogiMind link were lost. */
+export function riskLabel(riskId: string): string {
+  return `logimind-risk-${createHash('sha256').update(riskId).digest('hex').slice(0, 12)}`;
+}
 
 export class IssueService {
   constructor(
@@ -50,29 +57,28 @@ export class IssueService {
     return config;
   }
 
-  /** All links with live Jira status. A status lookup failure never hides the links themselves. */
+  /**
+   * All links with live Jira key and status, looked up by issue ID as the viewer. A status
+   * lookup failure never hides the links. Who created each issue is not sent to viewers.
+   */
   async listLinks(): Promise<IssueLinksData> {
     const [config, links] = await Promise.all([this.links.getConfig(), this.links.listLinks()]);
-    let statuses = new Map<string, IssueLinkView['status']>();
+    let live = new Map<string, LiveIssue>();
     let statusError: string | null = null;
-    const keys = links.map((l) => l.issueKey).filter((k) => ISSUE_KEY.test(k));
-    if (keys.length > 0) {
+    const ids = links.map((l) => l.issueId).filter((id) => ISSUE_ID.test(id));
+    if (ids.length > 0) {
       try {
-        statuses = await this.jira.getIssueStatuses(keys);
+        live = await this.jira.getIssueStatuses(ids);
       } catch (err) {
         statusError = err instanceof Error ? err.message : 'Could not read issue statuses';
       }
     }
-    return {
-      config,
-      statusError,
-      links: links.map((l) => ({ ...l, status: statuses.get(l.issueKey) ?? null })),
-    };
+    return { config, statusError, links: links.map((l) => toView(l, live.get(l.issueId) ?? null)) };
   }
 
   /**
-   * Creates one Jira issue for a currently active risk, as the current user. A risk that
-   * already has an issue (that still exists or that the user cannot see) is never duplicated.
+   * Creates one Jira issue for a currently active risk, as the current user. A risk whose
+   * issue still exists (even one the user cannot see) is never duplicated.
    */
   async createIssueForRisk(riskId: string, createdBy: string | null): Promise<CreateIssueOutcome> {
     const config = await this.links.getConfig();
@@ -85,15 +91,29 @@ export class IssueService {
     }
 
     try {
-      return await this.links.withRiskLock(riskId, async () => {
+      return await this.links.withRiskLock(riskId, async (): Promise<CreateIssueOutcome> => {
         const existing = await this.links.getLink(riskId);
-        if (existing && (await this.jira.issueExists(existing.issueKey)) === 'exists') {
-          return { ok: false, code: 'DUPLICATE', message: `Issue ${existing.issueKey} already tracks this risk.`, link: { ...existing, status: null } };
+        if (existing) {
+          const state = await this.jira.issueExists(existing.issueId);
+          if (state === 'exists') {
+            return { ok: false, code: 'DUPLICATE', message: `Issue ${existing.issueKey} already tracks this risk.`, link: toView(existing, null) };
+          }
+          if (state === 'hidden') {
+            return { ok: false, code: 'DUPLICATE', message: 'An issue you do not have access to already tracks this risk.' };
+          }
         }
-        const created = await this.jira.createIssue(config.projectKey, config.issueTypeId, buildIssueContent(risk));
+        const content = buildIssueContent(risk);
+        content.labels.push(riskLabel(risk.id));
+        const created = await this.jira.createIssue(config.projectKey, config.issueTypeId, content);
         const link = toLink(risk, created, config.projectKey, this.now().toISOString(), createdBy);
-        await this.links.saveLink(link);
-        return { ok: true, link: { ...link, status: null } };
+        if (!(await this.saveLinkWithRetry(link))) {
+          return {
+            ok: false,
+            code: 'LINK_FAILED',
+            message: `Created ${created.key}, but LogiMind could not record the link. Do not create it again; the issue carries the label ${riskLabel(risk.id)}.`,
+          };
+        }
+        return { ok: true, link: toView(link, null) };
       });
     } catch (err) {
       if (err instanceof RiskBusyError) return { ok: false, code: 'BUSY', message: err.message };
@@ -102,20 +122,41 @@ export class IssueService {
     }
   }
 
-  /** Data for the LogiMind panel on a Jira issue: the linked risk and its shipment, if any. */
-  async getIssueContext(issueKey: string): Promise<IssueContextData> {
-    const link = (await this.links.listLinks()).find((l) => l.issueKey === issueKey) ?? null;
+  /** Data for the LogiMind sidebar on a Jira issue, matched by issue ID (stable across moves). */
+  async getIssueContext(issueId: string, issueKey: string): Promise<IssueContextData> {
+    const link = (await this.links.listLinks()).find((l) => l.issueId === issueId) ?? null;
     if (!link) return { issueKey, link: null, currentRisk: null, shipment: null };
     const [{ risks }, shipment] = await Promise.all([
       this.logistics.listRisks(),
       link.entityType === 'shipment' ? this.logistics.getShipment(link.entityKey) : Promise.resolve(null),
     ]);
-    return { issueKey, link, currentRisk: risks.find((r) => r.id === link.riskId) ?? null, shipment };
+    return { issueKey, link: { ...toView(link, null), issueKey }, currentRisk: risks.find((r) => r.id === link.riskId) ?? null, shipment };
   }
 
   clearLinks(): Promise<void> {
     return this.links.clearLinks();
   }
+
+  private async saveLinkWithRetry(link: IssueLink): Promise<boolean> {
+    for (let attempt = 1; attempt <= LINK_SAVE_ATTEMPTS; attempt++) {
+      try {
+        await this.links.saveLink(link);
+        return true;
+      } catch {
+        /* retried below; reported to the user after the last attempt */
+      }
+    }
+    return false;
+  }
+}
+
+function toView(link: IssueLink, live: LiveIssue | null): IssueLinkView {
+  const { createdBy: _createdBy, ...rest } = link;
+  return {
+    ...rest,
+    issueKey: live?.issueKey ?? link.issueKey,
+    status: live ? { statusName: live.statusName, category: live.category } : null,
+  };
 }
 
 function toLink(risk: RiskEvent, issue: { id: string; key: string }, projectKey: string, createdAt: string, createdBy: string | null): IssueLink {

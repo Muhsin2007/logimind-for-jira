@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IssueService } from '../../src/services/issue-service';
+import { IssueService, riskLabel } from '../../src/services/issue-service';
 import { JiraError, type JiraGateway } from '../../src/jira/jira-gateway';
 import { RiskBusyError, type IssueLinkRepository } from '../../src/storage/issue-links';
 import type { IssueLink, JiraConfig, RiskEvent } from '../../src/domain/types';
@@ -33,7 +33,8 @@ function setup(opts: { config?: JiraConfig | null; risks?: RiskEvent[]; existing
     listCreatableProjects: vi.fn().mockResolvedValue([{ id: '1', key: 'SCRUM', name: 'My Software Team' }]),
     listIssueTypes: vi.fn().mockResolvedValue([{ id: '10001', name: 'Task' }]),
     createIssue: vi.fn().mockResolvedValue({ id: '200', key: 'SCRUM-8' }),
-    getIssueStatuses: vi.fn().mockResolvedValue(new Map([['SCRUM-7', { statusName: 'In Progress', category: 'indeterminate' }]])),
+    // The issue was moved since the link was saved: ID 100 is now OPS-3.
+    getIssueStatuses: vi.fn().mockResolvedValue(new Map([['100', { issueKey: 'OPS-3', statusName: 'In Progress', category: 'indeterminate' }]])),
     issueExists: vi.fn().mockResolvedValue('exists'),
   } satisfies JiraGateway;
   const logistics = {
@@ -51,13 +52,32 @@ describe('IssueService.createIssueForRisk', () => {
 
   it('creates the issue from the risk template and stores the link', async () => {
     const out = await ctx.service.createIssueForRisk(RISK.id, 'u1');
-    expect(out).toMatchObject({ ok: true, link: { issueKey: 'SCRUM-8', riskId: RISK.id, entityKey: 'SHP-1004', createdBy: 'u1' } });
+    expect(out).toMatchObject({ ok: true, link: { issueKey: 'SCRUM-8', riskId: RISK.id, entityKey: 'SHP-1004' } });
     expect(ctx.links.withRiskLock).toHaveBeenCalledWith(RISK.id, expect.any(Function));
     const [project, type, content] = ctx.jira.createIssue.mock.calls[0];
     expect([project, type]).toEqual(['SCRUM', '10001']);
     expect(content.summary).toBe('[Critical] Shipment SHP-1004 is 9 days past planned arrival');
-    expect(content.labels).toEqual(['logimind', 'logimind-late-shipment']);
+    expect(content.labels).toEqual(['logimind', 'logimind-late-shipment', riskLabel(RISK.id)]);
+    expect(riskLabel(RISK.id)).toMatch(/^logimind-risk-[0-9a-f]{12}$/);
     expect(ctx.links.saveLink).toHaveBeenCalledWith(expect.objectContaining({ issueKey: 'SCRUM-8', issueId: '200' }));
+    expect(out.ok && 'createdBy' in out.link).toBe(false);
+  });
+
+  it('retries the link save and reports the created key instead of inviting a duplicate', async () => {
+    ctx.links.saveLink.mockRejectedValueOnce(new Error('kvs down'));
+    expect(await ctx.service.createIssueForRisk(RISK.id, null)).toMatchObject({ ok: true });
+    ctx.links.saveLink.mockReset().mockRejectedValue(new Error('kvs down'));
+    const out = await ctx.service.createIssueForRisk(RISK.id, null);
+    expect(out).toMatchObject({ ok: false, code: 'LINK_FAILED', message: expect.stringContaining('Created SCRUM-8') });
+    expect(ctx.links.saveLink).toHaveBeenCalledTimes(3);
+  });
+
+  it('blocks a duplicate of an issue the user cannot see without revealing its key', async () => {
+    ctx = setup({ existing: EXISTING });
+    ctx.jira.issueExists.mockResolvedValue('hidden');
+    const out = await ctx.service.createIssueForRisk(RISK.id, null);
+    expect(out).toEqual({ ok: false, code: 'DUPLICATE', message: 'An issue you do not have access to already tracks this risk.' });
+    expect(ctx.jira.createIssue).not.toHaveBeenCalled();
   });
 
   it('refuses a duplicate while the linked issue still exists', async () => {
@@ -97,7 +117,10 @@ describe('IssueService.createIssueForRisk', () => {
 describe('IssueService links and settings', () => {
   it('lists links with live status and survives a status lookup failure', async () => {
     const ctx = setup({ existing: EXISTING });
-    expect((await ctx.service.listLinks()).links[0].status).toEqual({ statusName: 'In Progress', category: 'indeterminate' });
+    const first = (await ctx.service.listLinks()).links[0];
+    expect(first).toMatchObject({ issueKey: 'OPS-3', status: { statusName: 'In Progress', category: 'indeterminate' } });
+    expect('createdBy' in first).toBe(false);
+    expect(ctx.jira.getIssueStatuses).toHaveBeenCalledWith(['100']);
     ctx.jira.getIssueStatuses.mockRejectedValue(new JiraError('RATE_LIMITED', 'slow down'));
     const out = await ctx.service.listLinks();
     expect(out).toMatchObject({ statusError: 'slow down', links: [{ issueKey: 'SCRUM-7', status: null }] });
@@ -113,9 +136,10 @@ describe('IssueService links and settings', () => {
 
   it('returns issue context only for linked issues', async () => {
     const ctx = setup({ existing: EXISTING });
-    expect(await ctx.service.getIssueContext('SCRUM-1')).toEqual({ issueKey: 'SCRUM-1', link: null, currentRisk: null, shipment: null });
-    const linked = await ctx.service.getIssueContext('SCRUM-7');
-    expect(linked).toMatchObject({ link: { riskId: RISK.id }, currentRisk: { id: RISK.id } });
+    expect(await ctx.service.getIssueContext('999', 'SCRUM-1')).toEqual({ issueKey: 'SCRUM-1', link: null, currentRisk: null, shipment: null });
+    // Matched by ID even after the issue moved to another project.
+    const linked = await ctx.service.getIssueContext('100', 'OPS-3');
+    expect(linked).toMatchObject({ link: { riskId: RISK.id, issueKey: 'OPS-3' }, currentRisk: { id: RISK.id } });
     expect(ctx.logistics.getShipment).toHaveBeenCalledWith('SHP-1004');
   });
 });

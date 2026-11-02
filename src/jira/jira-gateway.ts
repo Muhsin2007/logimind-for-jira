@@ -1,5 +1,5 @@
 import type { IssueContent } from '../domain/jira-issue';
-import type { IssueStatus } from '../domain/types';
+import type { LiveIssue } from '../domain/types';
 
 export type JiraErrorCode = 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'RATE_LIMITED' | 'UNKNOWN';
 
@@ -31,8 +31,8 @@ export interface JiraGateway {
   /** Non-subtask issue types available for creating issues in the project. */
   listIssueTypes(projectKey: string): Promise<JiraIssueType[]>;
   createIssue(projectKey: string, issueTypeId: string, content: IssueContent): Promise<{ id: string; key: string }>;
-  /** Live status for each issue the user can see; missing keys are deleted or not visible. */
-  getIssueStatuses(issueKeys: string[]): Promise<Map<string, IssueStatus>>;
-  /** 'exists' also covers issues the user cannot see, so they are never duplicated. */
-  issueExists(issueKey: string): Promise<'exists' | 'missing'>;
+  /** Current key and status by issue ID, for issues the user can see; absent IDs are deleted or hidden. */
+  getIssueStatuses(issueIds: string[]): Promise<Map<string, LiveIssue>>;
+  /** 'hidden' = exists but the user cannot see it; it still blocks a duplicate. */
+  issueExists(issueId: string): Promise<'exists' | 'hidden' | 'missing'>;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { call, errorMessage, useAsync, type JiraConfig } from '../api';
 import { ErrorState, Loading, Panel } from '../components';
 import { fmtDateTime } from '../format';
@@ -14,9 +14,18 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
   const issueTypes = useAsync(() => (projectKey ? call('listJiraIssueTypes', { projectKey }) : Promise.resolve([])), [projectKey]);
 
   const config: JiraConfig | null = current.status === 'ready' ? current.data.config : null;
+  // Pre-select the saved project once; afterwards the admin's choice (even "none") stands.
+  const initialised = useRef(false);
   useEffect(() => {
-    if (config && !projectKey) setProjectKey(config.projectKey);
-  }, [config, projectKey]);
+    if (!initialised.current && config) {
+      initialised.current = true;
+      setProjectKey(config.projectKey);
+    }
+  }, [config]);
+  const chooseProject = (key: string) => {
+    setIssueTypeId(''); // never keep a type from the previous project
+    setProjectKey(key);
+  };
   useEffect(() => {
     if (issueTypes.status !== 'ready') return;
     const keep = issueTypes.data.some((t) => t.id === issueTypeId);
@@ -61,7 +70,7 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
         <div className="row">
           <label className="checkbox">
             Project
-            <select className="input" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} disabled={projects.status !== 'ready'}>
+            <select className="input" value={projectKey} onChange={(e) => chooseProject(e.target.value)} disabled={projects.status !== 'ready'}>
               <option value="">Choose a project…</option>
               {projects.status === 'ready' && projects.data.map((p) => <option key={p.key} value={p.key}>{p.name} ({p.key})</option>)}
             </select>

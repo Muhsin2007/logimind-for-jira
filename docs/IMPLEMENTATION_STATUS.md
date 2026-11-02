@@ -7,7 +7,33 @@ Last updated: 2026-11-02
 | 0 — Documentation and planning | ✅ Done — `docs/PROJECT_PLAN.md` |
 | 1 — Environment and Hello World | ✅ Done — verified inside Jira |
 | 2 — Core application | ✅ Done — verified inside Jira (dev environment, app v4.0.0) |
-| 3–7 | ⏳ Not started |
+| 3 — Jira integration | ✅ Done — verified inside Jira (app v5.2.0) |
+| 4–7 | ⏳ Not started |
+
+## Phase 3 — Jira integration
+
+**Built**
+- Settings (admin only): target project + issue type, validated against the admin's Jira access; only standard-level types (no Epics/sub-tasks); localized Task default (`Task|Задача|vazifa`).
+- "Create Jira issue" on Risk Center cards and in the shipment drawer, with an inline confirmation naming the project. Created **as the clicking user** (`POST /rest/api/3/issue`), so Jira's own create permission applies.
+- Issue content from a fixed ADF template (no markup from CSV): `[Severity] risk title`, evidence list, risk ID, rule version; labels `logimind`, `logimind-<risk-type>`, `logimind-risk-<hash>` (per-risk, searchable).
+- Duplicate prevention: token-owned per-risk KVS lock + one link record per risk; existing issue (visible or hidden) blocks a new one; re-create only if the linked issue was deleted (404). Link save retried 3×; on failure the user gets the created key instead of a silent orphan.
+- Live key + status by **issue ID** (`POST /rest/api/3/search/jql`, `id in (…)`), so moved/renamed issues stay linked. Fresh issues show "just created" while Jira indexes them.
+- `jira:issueContext` sidebar on every issue: the source risk (still active or resolved in current data) and the shipment facts; matched by the server-side issue ID.
+- Error mapping for 400/401/403/404/429 into actionable messages; viewers never receive `createdBy` account IDs.
+- Scopes: `storage:app`, `read:jira-work`, `write:jira-work`.
+
+**Verified**
+- `npx vitest run`: **63 passed** (+ `issue-service` 11, `jira-issue` 4).
+- Build, `forge lint` (one expected major-version approval for `write:jira-work`), deploys v5.0.0 → v5.2.0, `forge install --upgrade`.
+- In Jira (user's Chrome): saved SCRUM / Задача; created **SCRUM-5** from `LATE_SHIPMENT:SHP-1004`; issue has correct summary, ADF evidence and labels; Risk Center shows `SCRUM-5 · К выполнению`; SCRUM-5 sidebar shows the risk and shipment; re-checked after the ID-based change.
+
+**Not verified live**
+- Clicking create twice / concurrent creates (covered by unit tests; the UI hides the button once linked).
+- A user without create permission in SCRUM, and the hidden-duplicate path (needs a second account).
+
+**ecc review** (`ecc:code-reviewer`) — fixed: orphan issue on failed link save, lock errors misreported as busy, lock released by the wrong holder, `createdBy` and hidden issue keys leaking to viewers, links breaking when an issue moves (now by ID), JiraSettings pre-selection bugs, surrogate-pair truncation.
+
+**Commits:** `5c4160b` Phase 3 · (this) review fixes
 
 ## Phase 2 — Core application
 

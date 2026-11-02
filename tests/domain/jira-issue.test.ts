@@ -31,4 +31,10 @@ describe('buildIssueContent', () => {
     expect(long.length).toBe(250);
     expect(long).not.toContain('\n');
   });
+
+  it('never cuts a character in half when truncating', () => {
+    const summary = buildIssueContent({ ...risk, title: '📦'.repeat(300) }).summary;
+    expect(Array.from(summary)).toHaveLength(250);
+    expect(summary.endsWith('📦')).toBe(true);
+  });
 });

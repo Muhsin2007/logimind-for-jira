@@ -56,7 +56,8 @@ export type ImportOutcome =
   | { ok: true; batch: ImportBatch; replaced: boolean }
   | { ok: false; errors: RowError[] };
 
-export interface IssueLinkView extends IssueLink {
+/** A link as shown to viewers: current key, live status, and no creator account ID. */
+export interface IssueLinkView extends Omit<IssueLink, 'createdBy'> {
   /** Live Jira status; null when the issue was deleted or the viewer cannot see it. */
   status: IssueStatus | null;
 }
@@ -72,14 +73,14 @@ export type CreateIssueOutcome =
   | { ok: true; link: IssueLinkView }
   | {
       ok: false;
-      code: 'NOT_CONFIGURED' | 'RISK_NOT_FOUND' | 'DUPLICATE' | 'BUSY' | 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'RATE_LIMITED' | 'UNKNOWN';
+      code: 'NOT_CONFIGURED' | 'RISK_NOT_FOUND' | 'DUPLICATE' | 'BUSY' | 'LINK_FAILED' | 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'RATE_LIMITED' | 'UNKNOWN';
       message: string;
       link?: IssueLinkView;
     };
 
 export interface IssueContextData {
   issueKey: string;
-  link: IssueLink | null;
+  link: IssueLinkView | null;
   /** The risk as evaluated now; null when the condition no longer holds (resolved in the data). */
   currentRisk: RiskEvent | null;
   shipment: ShipmentDetail | null;

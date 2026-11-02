@@ -19,9 +19,20 @@ Last updated: 2026-11-02 (Phase 2). Reviewer: `ecc:security-reviewer`, plus `ecc
 | 6 | Info | KVS key injection | Not exploitable — IDs validated, key parts base64url-encoded |
 | 7 | Info | XSS | No sink — values rendered as React text; no `dangerouslySetInnerHTML`, no data-built links |
 | 8 | Info | CSV formula injection | No export exists; escape `= + - @` if an export is added |
-| 9 | Info | Scopes | Least privilege: `storage:app`, `read:jira-work` (permission check). `write:jira-work` only with Phase 3 |
+| 9 | Info | Scopes | Least privilege: `storage:app`, `read:jira-work` (permission check, projects, status), `write:jira-work` (issue creation, Phase 3) |
 | 10 | Info | `prosemirror-view` XSS advisory via `@forge/bridge` transitive deps | Not in the built bundle (tree-shaken); re-check when `@forge/bridge` updates |
 | 11 | Info | Secrets | None in source; app ID is not a secret |
+
+## Phase 3 additions (Jira issue creation)
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 12 | Medium | Issue created but link save fails → retry creates a duplicate | **Fixed** — 3 save attempts, then `LINK_FAILED` with the created key; per-risk label for recovery |
+| 13 | Medium | Lock acquisition errors reported as "busy"; expired lock released by the wrong holder | **Fixed** — shared token-owned `withKvsLock` for both locks |
+| 14 | Medium | Viewers could see creator account IDs and keys of issues they cannot access | **Fixed** — `createdBy` stripped; hidden duplicates reported without the key. Residual: a link's last-known key is still listed when the viewer cannot see the issue (status shows "unavailable") |
+| 15 | Medium | Links break when an issue moves project | **Fixed** — status and sidebar look up by issue ID |
+| 16 | Info | JQL / markup injection | Not exploitable — only numeric IDs reach JQL; CSV values are ADF text nodes |
+| 17 | Info | Who may create issues | Any page viewer, but only once per active risk and only where Jira lets *them* create (asUser) |
 
 ## Known limitations (accepted for now)
 - "Today" is evaluated in UTC, so users far from UTC may see a risk change day a few hours early or late.

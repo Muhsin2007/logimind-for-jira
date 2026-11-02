@@ -1,5 +1,6 @@
 import { kvs, WhereConditions } from '@forge/kvs';
 import type { ImportBatch, InventoryItem, Shipment } from '../domain/types';
+import { LockHeldError, withKvsLock } from './kvs-lock';
 import { WriteInProgressError, type LogisticsRepository } from './repository';
 
 const PREFIX = {
@@ -113,15 +114,9 @@ export class KvsLogisticsRepository implements LogisticsRepository {
 
   async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
     try {
-      // Atomic create-if-absent; the TTL frees the lock if a function dies mid-write.
-      await kvs.set(LOCK_KEY, { since: new Date().toISOString() }, { keyPolicy: 'FAIL_IF_EXISTS', ttl: { value: 2, unit: 'MINUTES' } });
-    } catch {
-      throw new WriteInProgressError();
-    }
-    try {
-      return await fn();
-    } finally {
-      await kvs.delete(LOCK_KEY).catch(() => undefined);
+      return await withKvsLock(LOCK_KEY, 2, fn);
+    } catch (err) {
+      throw err instanceof LockHeldError ? new WriteInProgressError() : err;
     }
   }
 }

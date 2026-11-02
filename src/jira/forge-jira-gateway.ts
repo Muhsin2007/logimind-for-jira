@@ -1,6 +1,6 @@
 import api, { route } from '@forge/api';
 import type { IssueContent } from '../domain/jira-issue';
-import type { IssueStatus, StatusCategory } from '../domain/types';
+import type { LiveIssue, StatusCategory } from '../domain/types';
 import { JiraError, type JiraGateway, type JiraIssueType, type JiraProject } from './jira-gateway';
 
 type ForgeResponse = Awaited<ReturnType<ReturnType<typeof api.asUser>['requestJira']>>;
@@ -72,22 +72,23 @@ export class ForgeJiraGateway implements JiraGateway {
     return { id: body.id, key: body.key };
   }
 
-  async getIssueStatuses(issueKeys: string[]): Promise<Map<string, IssueStatus>> {
-    const out = new Map<string, IssueStatus>();
-    for (let i = 0; i < issueKeys.length; i += SEARCH_CHUNK) {
-      const chunk = issueKeys.slice(i, i + SEARCH_CHUNK);
+  async getIssueStatuses(issueIds: string[]): Promise<Map<string, LiveIssue>> {
+    const out = new Map<string, LiveIssue>();
+    const ids = issueIds.filter((id) => /^\d{1,18}$/.test(id)); // numeric only: safe to embed in JQL
+    for (let i = 0; i < ids.length; i += SEARCH_CHUNK) {
+      const chunk = ids.slice(i, i + SEARCH_CHUNK);
       const res = await api.asUser().requestJira(route`/rest/api/3/search/jql`, {
         method: 'POST',
         headers: JSON_HEADERS,
-        // Keys come from our own link records and match Jira's KEY-123 format (validated on save).
-        body: JSON.stringify({ jql: `key in (${chunk.join(',')})`, fields: ['status'], maxResults: SEARCH_CHUNK }),
+        body: JSON.stringify({ jql: `id in (${chunk.join(',')})`, fields: ['status'], maxResults: SEARCH_CHUNK }),
       });
       if (!res.ok) throw await toJiraError(res, 'read issue statuses');
-      const body = (await res.json()) as { issues?: { key: string; fields?: { status?: RawStatus } }[] };
+      const body = (await res.json()) as { issues?: { id: string; key: string; fields?: { status?: RawStatus } }[] };
       for (const issue of body.issues ?? []) {
         const status = issue.fields?.status;
         const category = status?.statusCategory?.key as StatusCategory | undefined;
-        out.set(issue.key, {
+        out.set(issue.id, {
+          issueKey: issue.key,
           statusName: status?.name ?? 'Unknown',
           category: category && CATEGORIES.includes(category) ? category : 'unknown',
         });
@@ -96,11 +97,12 @@ export class ForgeJiraGateway implements JiraGateway {
     return out;
   }
 
-  async issueExists(issueKey: string): Promise<'exists' | 'missing'> {
-    const res = await api.asUser().requestJira(route`/rest/api/3/issue/${issueKey}?fields=status`, { headers: JSON_HEADERS });
+  async issueExists(issueId: string): Promise<'exists' | 'hidden' | 'missing'> {
+    const res = await api.asUser().requestJira(route`/rest/api/3/issue/${issueId}?fields=status`, { headers: JSON_HEADERS });
+    if (res.ok) return 'exists';
     if (res.status === 404) return 'missing';
-    if (res.ok || res.status === 403 || res.status === 401) return 'exists';
-    throw await toJiraError(res, `check issue ${issueKey}`);
+    if (res.status === 403 || res.status === 401) return 'hidden';
+    throw await toJiraError(res, 'check the linked issue');
   }
 }
 

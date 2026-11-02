@@ -31,7 +31,8 @@ const paragraph = (...content: AdfNode[]): AdfNode => ({ type: 'paragraph', cont
  * as plain ADF text nodes (never markup), and nothing is added that the risk does not contain.
  */
 export function buildIssueContent(risk: RiskEvent): IssueContent {
-  const summary = `[${SEVERITY_LABEL[risk.severity]}] ${risk.title}`.replace(/\s+/g, ' ').slice(0, MAX_SUMMARY);
+  // Truncate by code point so Cyrillic or emoji titles never end in half a character.
+  const summary = Array.from(`[${SEVERITY_LABEL[risk.severity]}] ${risk.title}`.replace(/\s+/g, ' ')).slice(0, MAX_SUMMARY).join('');
   const evidence = risk.evidence
     .filter((e) => e.value !== null && e.value !== '')
     .map((e) => ({ type: 'listItem', content: [paragraph(text(`${e.label}: `, true), text(String(e.value)))] }));

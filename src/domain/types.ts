@@ -118,6 +118,11 @@ export interface IssueStatus {
   category: StatusCategory;
 }
 
+/** Live view of an issue found by ID; the key is current even if the issue was moved. */
+export interface LiveIssue extends IssueStatus {
+  issueKey: string;
+}
+
 export interface Kpis {
   shipmentsTotal: number;
   shipmentsOpen: number;

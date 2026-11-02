@@ -1,6 +1,7 @@
 import { kvs, WhereConditions } from '@forge/kvs';
 import type { IssueLink, JiraConfig } from '../domain/types';
 import { RiskBusyError, type IssueLinkRepository } from './issue-links';
+import { LockHeldError, withKvsLock } from './kvs-lock';
 
 const CONFIG_KEY = 'cfg:jira';
 const LINK_PREFIX = 'lnk:';
@@ -46,16 +47,11 @@ export class KvsIssueLinkRepository implements IssueLinkRepository {
   }
 
   async withRiskLock<T>(riskId: string, fn: () => Promise<T>): Promise<T> {
-    const lockKey = `${LOCK_PREFIX}${encode(riskId)}`;
     try {
-      await kvs.set(lockKey, { since: new Date().toISOString() }, { keyPolicy: 'FAIL_IF_EXISTS', ttl: { value: 1, unit: 'MINUTES' } });
-    } catch {
-      throw new RiskBusyError();
-    }
-    try {
-      return await fn();
-    } finally {
-      await kvs.delete(lockKey).catch(() => undefined);
+      // 2 minutes comfortably covers a Jira create call plus the link write.
+      return await withKvsLock(`${LOCK_PREFIX}${encode(riskId)}`, 2, fn);
+    } catch (err) {
+      throw err instanceof LockHeldError ? new RiskBusyError() : err;
     }
   }
 }
