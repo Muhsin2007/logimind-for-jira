@@ -82,6 +82,23 @@ describe('importCsv — shipments', () => {
     expect(importCsv(SHIP_HEADER).ok).toBe(false);
   });
 
+  it('rejects rows with extra values but accepts missing trailing optional values', () => {
+    const r = importCsv(`${SHIP_HEADER}\nSHP-1,,Acme, Inc,S,1,2026-11-04,,,planned,W\nSHP-2,,Acme,S,1,2026-11-04,,,planned,W`);
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.errors[0]).toMatchObject({ line: 2, message: expect.stringMatching(/11 values but the header has 10/) });
+    const short = importCsv('sku,warehouse,on_hand,safety_stock,unit_cost\nSKU-1,W,1,1');
+    expect(short.ok && short.errors).toEqual([]);
+  });
+
+  it('rejects duplicate columns and out-of-range numbers', () => {
+    expect(importCsv(`${SHIP_HEADER},qty\nSHP-1,,A,S,1,2026-11-04,,,planned,W,2`)).toMatchObject({
+      ok: false,
+      errors: [{ message: 'Duplicate column(s): qty' }],
+    });
+    const r = importCsv(`${SHIP_HEADER}\nSHP-1,,A,S,99999999999999999999,2026-11-04,,,planned,W`);
+    expect(r.ok && r.errors[0].message).toMatch(/at most/);
+  });
+
   it('strips control characters from text fields', () => {
     const r = importCsv(`${SHIP_HEADER}\nSHP-1,,"Acme\u0007 Corp",S,1,2026-11-04,,,planned,W`);
     if (!r.ok || r.kind !== 'shipments') throw new Error('expected shipments');

@@ -1,5 +1,5 @@
 import { invoke } from '@forge/bridge';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResolverApi } from '../../../src/shared/api';
 
 export type * from '../../../src/shared/api';
@@ -16,20 +16,29 @@ export type AsyncState<T> =
   | { status: 'error'; message: string }
   | { status: 'ready'; data: T };
 
+/** Forge `invoke` often rejects with plain objects rather than `Error` instances. */
 export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  if (err instanceof Error) return err.message;
+  const message = (err as { message?: unknown } | null)?.message;
+  return typeof message === 'string' ? message : 'Unexpected error';
 }
 
-/** Runs `load` on mount and whenever `deps` change; `reload` re-runs it on demand. */
+/**
+ * Runs `load` on mount and whenever `deps` change; `reload` re-runs it on demand.
+ * A refetch keeps showing the previous data instead of dropping back to loading.
+ */
 export function useAsync<T>(load: () => Promise<T>, deps: unknown[]): AsyncState<T> & { reload: () => void } {
   const [state, setState] = useState<AsyncState<T>>({ status: 'loading' });
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((t) => t + 1), []);
+  // Callers close only over values listed in `deps`, so the latest `load` is always the right one.
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
     let cancelled = false;
-    setState({ status: 'loading' });
-    load()
+    setState((s) => (s.status === 'ready' ? s : { status: 'loading' }));
+    loadRef.current()
       .then((data) => !cancelled && setState({ status: 'ready', data }))
       .catch((err: unknown) => !cancelled && setState({ status: 'error', message: errorMessage(err) }));
     return () => {
@@ -38,5 +47,5 @@ export function useAsync<T>(load: () => Promise<T>, deps: unknown[]): AsyncState
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
-  return { ...state, reload };
+  return useMemo(() => ({ ...state, reload }), [state, reload]);
 }

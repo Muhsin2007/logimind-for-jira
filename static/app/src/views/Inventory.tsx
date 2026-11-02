@@ -69,18 +69,19 @@ export function Inventory({ dataVersion }: NavProps) {
                   <td className="num" title={i.inboundShipmentIds.join(', ') || undefined}>{fmtNumber(i.inboundSoon)}</td>
                   <td className="num"><strong>{fmtNumber(i.projected)}</strong></td>
                   <td className="num">{fmtNumber(i.safetyStock)}</td>
-                  <td>
+                  <td className="nowrap">
                     <span
                       className="meter"
                       role="meter"
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={Math.round(Math.min(coverage, 1) * 100)}
-                      aria-label={`Projected stock is ${Math.round(coverage * 100)}% of safety stock`}
-                      title={`${Math.round(coverage * 100)}% of safety stock`}
+                      aria-valuetext={`${Math.round(coverage * 100)}% of safety stock`}
+                      aria-label="Coverage of safety stock"
                     >
                       <span className={`meter-fill${coverage < 1 ? ' meter-low' : ''}`} style={{ width: `${Math.min(coverage, 1) * 100}%` }} />
-                    </span>
+                    </span>{' '}
+                    <span className="small" aria-hidden="true">{Math.round(coverage * 100)}%</span>
                   </td>
                   <td className="num">{i.unitCost === null ? '—' : fmtMoney(i.unitCost)}</td>
                   <td>{i.risk ? <SeverityBadge severity={i.risk.severity} /> : <span className="muted">—</span>}</td>

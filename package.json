@@ -12,6 +12,7 @@
     "build": "npm run typecheck && npm run build:ui"
   },
   "dependencies": {
+    "@forge/api": "^8.4.0",
     "@forge/kvs": "^2.1.1",
     "@forge/resolver": "^1.6.0"
   },

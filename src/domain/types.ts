@@ -78,6 +78,8 @@ export interface ImportBatch {
   kind: ImportKind;
   filename: string;
   importedAt: string;
+  /** Atlassian account ID of the importing user, for audit. */
+  importedBy: string | null;
   rowsTotal: number;
   rowsValid: number;
   rowsRejected: number;

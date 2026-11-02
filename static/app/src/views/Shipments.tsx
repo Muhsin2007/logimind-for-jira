@@ -60,15 +60,20 @@ export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
           </thead>
           <tbody>
             {rows.map((s) => (
-              <tr
-                key={s.id}
-                className="clickable"
-                tabIndex={0}
-                onClick={() => onOpenShipment(s.id)}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onOpenShipment(s.id))}
-                aria-label={`Open shipment ${s.id}`}
-              >
-                <td className="mono">{s.id}</td>
+              // The ID button is the accessible control; row click is a mouse convenience.
+              <tr key={s.id} className="clickable" onClick={() => onOpenShipment(s.id)}>
+                <td>
+                  <button
+                    type="button"
+                    className="link mono"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenShipment(s.id);
+                    }}
+                  >
+                    {s.id}
+                  </button>
+                </td>
                 <td>{s.supplier}</td>
                 <td className="mono">{s.sku}</td>
                 <td className="num">{fmtNumber(s.qty)}</td>

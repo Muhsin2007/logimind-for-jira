@@ -55,6 +55,7 @@ export type ImportOutcome =
 
 export interface ResolverApi {
   getHealth: { payload: void; result: { status: 'ok'; timestamp: string } };
+  getAccess: { payload: void; result: { canManageData: boolean } };
   getDashboard: { payload: void; result: DashboardData };
   listShipments: { payload: void; result: { today: IsoDate; shipments: ShipmentRow[] } };
   getShipment: { payload: { id: string }; result: ShipmentDetail | null };

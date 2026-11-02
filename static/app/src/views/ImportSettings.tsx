@@ -10,6 +10,9 @@ type Busy = null | 'upload' | 'demo' | 'clear';
 
 export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const history = useAsync(() => call('listImports'), [dataVersion]);
+  const access = useAsync(() => call('getAccess'), []);
+  // The server enforces this; the UI only avoids offering actions that would be refused.
+  const canManage = access.status === 'ready' && access.data.canManageData;
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [outcomes, setOutcomes] = useState<{ filename: string; outcome: ImportOutcome }[]>([]);
@@ -54,22 +57,28 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           header. Each import <strong>replaces</strong> the current dataset of that type; rows that fail validation are rejected and listed
           below, never silently used.
         </p>
+        {access.status === 'ready' && !canManage && (
+          <p className="notice" role="note">Only Jira administrators can import, load or delete data. You can view everything else.</p>
+        )}
         <div className="row">
+          <label htmlFor="csv-files" className="h4">CSV files</label>
           <input
+            id="csv-files"
             ref={fileInput}
             type="file"
             accept=".csv,text/csv"
             multiple
-            aria-label="Choose CSV files"
-            disabled={busy !== null}
+            disabled={busy !== null || !canManage}
             onChange={(e) => upload(e.target.files)}
           />
           {busy === 'upload' && <span className="muted">Importing…</span>}
         </div>
         {error && <p role="alert" className="text-danger">{error}</p>}
-        {outcomes.map(({ filename, outcome }) => (
-          <ImportResult key={filename} filename={filename} outcome={outcome} />
-        ))}
+        <div aria-live="polite">
+          {outcomes.map(({ filename, outcome }, i) => (
+            <ImportResult key={`${i}-${filename}`} filename={filename} outcome={outcome} />
+          ))}
+        </div>
       </Panel>
 
       <div className="grid-2">
@@ -83,12 +92,13 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
 
         <Panel title="Demo and data management">
           <p>Load a synthetic dataset (30 shipments, 12 stock positions) with dates relative to today. It replaces current data.</p>
+          <p className="muted small">Imports are limited to 2,000 rows per file.</p>
           <div className="row">
-            <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}>
+            <button type="button" className="btn btn-primary" disabled={busy !== null || !canManage} onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}>
               {busy === 'demo' ? 'Loading…' : 'Load demo data'}
             </button>
             {!confirmClear ? (
-              <button type="button" className="btn btn-danger-subtle" disabled={busy !== null} onClick={() => setConfirmClear(true)}>
+              <button type="button" className="btn btn-danger-subtle" disabled={busy !== null || !canManage} onClick={() => setConfirmClear(true)}>
                 Delete all data…
               </button>
             ) : (
@@ -133,7 +143,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
 function ImportResult({ filename, outcome }: { filename: string; outcome: ImportOutcome }) {
   const errors = outcome.ok ? outcome.batch.errors : outcome.errors;
   return (
-    <div className={`result ${outcome.ok && outcome.batch.rowsRejected === 0 ? 'result-ok' : 'result-warn'}`} role="status">
+    <div className={`result ${outcome.ok && outcome.batch.rowsRejected === 0 ? 'result-ok' : 'result-warn'}`}>
       <strong>{filename}: </strong>
       {outcome.ok ? (
         <>

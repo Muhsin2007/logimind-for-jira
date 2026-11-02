@@ -1,15 +1,18 @@
 import { kvs, WhereConditions } from '@forge/kvs';
 import type { ImportBatch, InventoryItem, Shipment } from '../domain/types';
-import type { LogisticsRepository } from './repository';
+import { WriteInProgressError, type LogisticsRepository } from './repository';
 
 const PREFIX = {
   shipment: 'shp:',
   inventory: 'inv:',
   batch: 'batch:',
 } as const;
+const LOCK_KEY = 'lock:write';
 
 /** Forge KVS batch operations accept a limited number of items per call. */
 const BATCH_SIZE = 20;
+/** Batches sent concurrently; keeps large imports inside the resolver timeout. */
+const CONCURRENCY = 4;
 const PAGE_SIZE = 100;
 const BATCHES_KEPT = 10;
 
@@ -30,34 +33,48 @@ async function listByPrefix<T>(prefix: string): Promise<{ key: string; value: T 
     out.push(...page.results);
     cursor = page.nextCursor;
   } while (cursor);
-  return out;
+  return out.sort((a, b) => a.key.localeCompare(b.key));
 }
 
-async function setMany<T>(items: { key: string; value: T }[]): Promise<void> {
-  for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    const result = await kvs.batchSet(items.slice(i, i + BATCH_SIZE));
-    if (result.failedKeys.length > 0) {
-      throw new Error(`Storage write failed for ${result.failedKeys.length} record(s)`);
-    }
+/** Runs `task` over fixed-size chunks with bounded concurrency. */
+async function inChunks<T>(items: T[], task: (chunk: T[]) => Promise<void>): Promise<void> {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += BATCH_SIZE) chunks.push(items.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+    await Promise.all(chunks.slice(i, i + CONCURRENCY).map(task));
   }
 }
 
-async function deleteMany(keys: string[]): Promise<void> {
-  for (let i = 0; i < keys.length; i += BATCH_SIZE) {
-    const result = await kvs.batchDelete(keys.slice(i, i + BATCH_SIZE).map((key) => ({ key })));
-    if (result.failedKeys.length > 0) {
-      throw new Error(`Storage delete failed for ${result.failedKeys.length} record(s)`);
-    }
-  }
+function setMany<T>(items: { key: string; value: T }[]): Promise<void> {
+  return inChunks(items, async (chunk) => {
+    const result = await kvs.batchSet(chunk);
+    if (result.failedKeys.length > 0) throw new Error(`Storage write failed for ${result.failedKeys.length} record(s)`);
+  });
 }
 
-/** Writes the new records first, then removes stale keys, so readers never see an empty dataset mid-import. */
+function deleteMany(keys: string[]): Promise<void> {
+  return inChunks(keys, async (chunk) => {
+    const result = await kvs.batchDelete(chunk.map((key) => ({ key })));
+    if (result.failedKeys.length > 0) throw new Error(`Storage delete failed for ${result.failedKeys.length} record(s)`);
+  });
+}
+
+/**
+ * Writes the new records, then removes stale keys, so readers never see an empty dataset.
+ * If writing fails, keys that did not exist before are removed again (best effort), so a
+ * failed import never leaves old and new rows mixed with extra records.
+ */
 async function replace<T>(prefix: string, records: T[], keyOf: (r: T) => string): Promise<void> {
+  const before = new Set((await listByPrefix<unknown>(prefix)).map((e) => e.key));
   const items = records.map((value) => ({ key: keyOf(value), value }));
-  await setMany(items);
+  try {
+    await setMany(items);
+  } catch (err) {
+    await deleteMany(items.map((i) => i.key).filter((k) => !before.has(k))).catch(() => undefined);
+    throw err;
+  }
   const keep = new Set(items.map((i) => i.key));
-  const existing = await listByPrefix<unknown>(prefix);
-  await deleteMany(existing.map((e) => e.key).filter((k) => !keep.has(k)));
+  await deleteMany([...before].filter((k) => !keep.has(k)));
 }
 
 export class KvsLogisticsRepository implements LogisticsRepository {
@@ -78,11 +95,10 @@ export class KvsLogisticsRepository implements LogisticsRepository {
   }
 
   async saveImportBatch(batch: ImportBatch): Promise<void> {
-    // Keys sort lexicographically, and ISO timestamps sort chronologically.
+    // Fixed-width timestamp digits make lexicographic key order chronological.
     await kvs.set(`${PREFIX.batch}${batch.importedAt.replace(/[^0-9]/g, '')}.${batch.id}`, batch);
     const all = await listByPrefix<ImportBatch>(PREFIX.batch);
-    const stale = all.slice(0, Math.max(0, all.length - BATCHES_KEPT)).map((b) => b.key);
-    await deleteMany(stale);
+    await deleteMany(all.slice(0, Math.max(0, all.length - BATCHES_KEPT)).map((b) => b.key));
   }
 
   async listImportBatches(): Promise<ImportBatch[]> {
@@ -92,6 +108,20 @@ export class KvsLogisticsRepository implements LogisticsRepository {
   async clearAll(): Promise<void> {
     for (const prefix of Object.values(PREFIX)) {
       await deleteMany((await listByPrefix<unknown>(prefix)).map((e) => e.key));
+    }
+  }
+
+  async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      // Atomic create-if-absent; the TTL frees the lock if a function dies mid-write.
+      await kvs.set(LOCK_KEY, { since: new Date().toISOString() }, { keyPolicy: 'FAIL_IF_EXISTS', ttl: { value: 2, unit: 'MINUTES' } });
+    } catch {
+      throw new WriteInProgressError();
+    }
+    try {
+      return await fn();
+    } finally {
+      await kvs.delete(LOCK_KEY).catch(() => undefined);
     }
   }
 }

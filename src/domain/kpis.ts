@@ -1,20 +1,26 @@
-import { addDays, daysBetween } from './dates';
-import { INBOUND_WINDOW_DAYS, isLate, isOpen, stockPosition } from './risk-engine';
+import { daysBetween } from './dates';
+import { buildInboundIndex, isLate, isOpen, lowStockSeverity, stockPosition, type InboundIndex } from './risk-engine';
 import { SEVERITIES, type InventoryItem, type IsoDate, type Kpis, type RiskEvent, type Severity, type Shipment } from './types';
 
-export function computeKpis(shipments: Shipment[], inventory: InventoryItem[], risks: RiskEvent[], today: IsoDate): Kpis {
-  const delivered = shipments.filter((s) => s.status === 'delivered' && s.actualArrival);
-  const onTime = delivered.filter((s) => daysBetween(s.plannedArrival, s.actualArrival as IsoDate) <= 0);
-  const windowEnd = addDays(today, INBOUND_WINDOW_DAYS);
+export function computeKpis(
+  shipments: Shipment[],
+  inventory: InventoryItem[],
+  risks: RiskEvent[],
+  today: IsoDate,
+  index: InboundIndex = buildInboundIndex(shipments, today),
+): Kpis {
+  const delivered = shipments.filter(
+    (s): s is Shipment & { actualArrival: IsoDate } => s.status === 'delivered' && s.actualArrival !== null,
+  );
+  const onTime = delivered.filter((s) => daysBetween(s.plannedArrival, s.actualArrival) <= 0);
 
   let skusBelowSafety = 0;
   let valueAtRisk = 0;
   for (const item of inventory) {
-    const { shortfall } = stockPosition(item, shipments, today, windowEnd);
-    if (shortfall > 0) {
-      skusBelowSafety++;
-      if (item.unitCost !== null) valueAtRisk += shortfall * item.unitCost;
-    }
+    const position = stockPosition(item, index);
+    // Same predicate as the LOW_STOCK rule, so the KPI and the Risk Center always agree.
+    if (lowStockSeverity(item, position)) skusBelowSafety++;
+    if (position.shortfall > 0 && item.unitCost !== null) valueAtRisk += position.shortfall * item.unitCost;
   }
 
   const risksBySeverity = Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Record<Severity, number>;

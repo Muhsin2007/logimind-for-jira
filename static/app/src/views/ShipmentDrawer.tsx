@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { call, useAsync } from '../api';
 import { ErrorState, Facts, Loading, SeverityBadge, StatusBadge } from '../components';
 import { fmtDate, fmtNumber, RISK_TYPE_LABEL } from '../format';
@@ -6,17 +6,37 @@ import { fmtDate, fmtNumber, RISK_TYPE_LABEL } from '../format';
 export function ShipmentDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const state = useAsync(() => call('getShipment', { id }), [id]);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLElement>(null);
 
+  // Focus the dialog on open and return focus to the opener on close.
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     closeButton.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => opener?.focus();
+  }, []);
+
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+      return;
+    }
+    if (e.key !== 'Tab' || !dialog.current) return;
+    // The page behind is `inert`, so only wrap focus at the dialog's edges.
+    const focusable = dialog.current.querySelectorAll<HTMLElement>('button, [href], input, select, [tabindex]:not([tabindex="-1"])');
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  };
 
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onClick={(e) => e.stopPropagation()}>
+    <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <aside ref={dialog} className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onKeyDown={onKeyDown}>
         <header className="drawer-head">
           <h2 id="drawer-title">Shipment <span className="mono">{id}</span></h2>
           <button ref={closeButton} type="button" className="btn btn-subtle" onClick={onClose} aria-label="Close shipment details">✕</button>

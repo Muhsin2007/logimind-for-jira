@@ -1,8 +1,9 @@
-import { addDays, todayUtc } from '../domain/dates';
+import { randomUUID } from 'node:crypto';
+import { todayUtc } from '../domain/dates';
 import { demoInventoryCsv, demoShipmentsCsv } from '../domain/demo-data';
 import { importCsv } from '../domain/importer';
 import { computeKpis } from '../domain/kpis';
-import { evaluateRisks, INBOUND_WINDOW_DAYS, stockPosition } from '../domain/risk-engine';
+import { buildInboundIndex, evaluateRisks, inventoryEntityKey, stockPosition, type InboundIndex } from '../domain/risk-engine';
 import { SEVERITIES, type ImportBatch, type InventoryItem, type IsoDate, type RiskEvent, type Shipment } from '../domain/types';
 import type { DashboardData, ImportOutcome, InventoryRow, ShipmentDetail, ShipmentRow } from '../shared/api';
 import type { LogisticsRepository } from '../storage/repository';
@@ -15,40 +16,51 @@ interface Snapshot {
   today: IsoDate;
   shipments: Shipment[];
   inventory: InventoryItem[];
+  index: InboundIndex;
   risks: RiskEvent[];
+  risksByEntity: Map<string, RiskEvent[]>;
 }
 
 export class LogisticsService {
   constructor(
     private readonly repo: LogisticsRepository,
     private readonly now: () => Date = () => new Date(),
-    private readonly newId: () => string = () => Math.random().toString(36).slice(2, 10),
+    private readonly newId: () => string = randomUUID,
   ) {}
 
+  /** Loads the dataset once and evaluates the rules once per request. */
   private async snapshot(): Promise<Snapshot> {
     const today = todayUtc(this.now());
     const [shipments, inventory] = await Promise.all([this.repo.listShipments(), this.repo.listInventory()]);
-    return { today, shipments, inventory, risks: evaluateRisks(shipments, inventory, today) };
+    const index = buildInboundIndex(shipments, today);
+    const risks = evaluateRisks(shipments, inventory, today, index);
+    const risksByEntity = new Map<string, RiskEvent[]>();
+    for (const r of risks) {
+      const key = `${r.entityType}:${r.entityKey}`;
+      const list = risksByEntity.get(key);
+      if (list) list.push(r);
+      else risksByEntity.set(key, [r]);
+    }
+    return { today, shipments, inventory, index, risks, risksByEntity };
   }
 
   async getDashboard(): Promise<DashboardData> {
-    const snap = await this.snapshot();
+    const [snap, imports] = await Promise.all([this.snapshot(), this.repo.listImportBatches()]);
     return {
       today: snap.today,
       hasData: snap.shipments.length + snap.inventory.length > 0,
-      kpis: computeKpis(snap.shipments, snap.inventory, snap.risks, snap.today),
+      kpis: computeKpis(snap.shipments, snap.inventory, snap.risks, snap.today, snap.index),
       topRisks: snap.risks.slice(0, 5),
-      recentImports: (await this.repo.listImportBatches()).slice(0, 5),
+      recentImports: imports.slice(0, 5),
     };
   }
 
   async listShipments(): Promise<{ today: IsoDate; shipments: ShipmentRow[] }> {
     const snap = await this.snapshot();
-    const byEntity = groupRisks(snap.risks);
     // Most severe risk first, then shipments without risk; each group by planned arrival.
     const rank = (r: ShipmentRow) => (r.topSeverity ? SEVERITIES.indexOf(r.topSeverity) : SEVERITIES.length);
     const shipments = snap.shipments
-      .map((s) => toShipmentRow(s, byEntity.get(s.id) ?? []))
+      .map((s) => toShipmentRow(s, snap.risksByEntity.get(`shipment:${s.id}`) ?? []))
       .sort((a, b) => rank(a) - rank(b) || a.plannedArrival.localeCompare(b.plannedArrival) || a.id.localeCompare(b.id));
     return { today: snap.today, shipments };
   }
@@ -57,10 +69,12 @@ export class LogisticsService {
     const snap = await this.snapshot();
     const shipment = snap.shipments.find((s) => s.id === id);
     if (!shipment) return null;
-    const item = snap.inventory.find((i) => i.sku === shipment.sku && i.warehouse === shipment.warehouse);
+    const item = snap.inventory.find(
+      (i) => i.sku.toUpperCase() === shipment.sku.toUpperCase() && i.warehouse.trim().toLowerCase() === shipment.warehouse.trim().toLowerCase(),
+    );
     return {
       shipment,
-      risks: snap.risks.filter((r) => r.entityType === 'shipment' && r.entityKey === id),
+      risks: snap.risksByEntity.get(`shipment:${id}`) ?? [],
       inventory: item ? toInventoryRow(item, snap) : null,
     };
   }
@@ -69,7 +83,7 @@ export class LogisticsService {
     const snap = await this.snapshot();
     const items = snap.inventory
       .map((i) => toInventoryRow(i, snap))
-      .sort((a, b) => b.shortfall - a.shortfall || a.sku.localeCompare(b.sku));
+      .sort((a, b) => b.shortfall - a.shortfall || a.available - b.available || a.sku.localeCompare(b.sku));
     return { today: snap.today, items };
   }
 
@@ -86,7 +100,24 @@ export class LogisticsService {
    * Validates and imports a CSV. Rows with errors are rejected and reported; if no row is
    * valid the existing dataset is left untouched.
    */
-  async importCsv(filename: string, content: string): Promise<ImportOutcome> {
+  importCsv(filename: string, content: string, importedBy: string | null): Promise<ImportOutcome> {
+    return this.repo.withWriteLock(() => this.importUnlocked(filename, content, importedBy));
+  }
+
+  loadDemoData(importedBy: string | null): Promise<ImportOutcome[]> {
+    const today = todayUtc(this.now());
+    return this.repo.withWriteLock(async () => [
+      await this.importUnlocked('demo-shipments.csv', demoShipmentsCsv(today), importedBy),
+      await this.importUnlocked('demo-inventory.csv', demoInventoryCsv(today), importedBy),
+    ]);
+  }
+
+  async clearData(): Promise<{ cleared: true }> {
+    await this.repo.withWriteLock(() => this.repo.clearAll());
+    return { cleared: true };
+  }
+
+  private async importUnlocked(filename: string, content: string, importedBy: string | null): Promise<ImportOutcome> {
     if (content.length > MAX_CSV_CHARS) {
       return { ok: false, errors: [{ line: 0, field: null, message: `File is too large (limit ${MAX_CSV_CHARS / 1_000_000} MB)` }] };
     }
@@ -98,6 +129,7 @@ export class LogisticsService {
       kind: result.kind,
       filename: filename.slice(0, MAX_FILENAME),
       importedAt: this.now().toISOString(),
+      importedBy,
       rowsTotal: result.rowsTotal,
       rowsValid: result.records.length,
       rowsRejected: result.rowsTotal - result.records.length,
@@ -111,25 +143,6 @@ export class LogisticsService {
     await this.repo.saveImportBatch(batch);
     return { ok: true, batch, replaced };
   }
-
-  async loadDemoData(): Promise<ImportOutcome[]> {
-    const today = todayUtc(this.now());
-    return [
-      await this.importCsv('demo-shipments.csv', demoShipmentsCsv(today)),
-      await this.importCsv('demo-inventory.csv', demoInventoryCsv(today)),
-    ];
-  }
-
-  async clearData(): Promise<{ cleared: true }> {
-    await this.repo.clearAll();
-    return { cleared: true };
-  }
-}
-
-function groupRisks(risks: RiskEvent[]): Map<string, RiskEvent[]> {
-  const map = new Map<string, RiskEvent[]>();
-  for (const r of risks) map.set(r.entityKey, [...(map.get(r.entityKey) ?? []), r]);
-  return map;
 }
 
 function toShipmentRow(s: Shipment, risks: RiskEvent[]): ShipmentRow {
@@ -138,7 +151,6 @@ function toShipmentRow(s: Shipment, risks: RiskEvent[]): ShipmentRow {
 }
 
 function toInventoryRow(item: InventoryItem, snap: Snapshot): InventoryRow {
-  const position = stockPosition(item, snap.shipments, snap.today, addDays(snap.today, INBOUND_WINDOW_DAYS));
-  const risk = snap.risks.find((r) => r.entityType === 'inventory' && r.entityKey === `${item.sku}@${item.warehouse}`) ?? null;
-  return { ...item, ...position, risk };
+  const risk = snap.risksByEntity.get(`inventory:${inventoryEntityKey(item)}`)?.[0] ?? null;
+  return { ...item, ...stockPosition(item, snap.index), risk };
 }

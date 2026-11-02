@@ -67,12 +67,21 @@ describe('LOW_STOCK', () => {
     expect(types([], [inv({ onHand: 5, reserved: 5 })])).toEqual(['LOW_STOCK:critical']);
     expect(types([], [inv({ onHand: 4, safetyStock: 10 })])).toEqual(['LOW_STOCK:high']);
   });
-  it('counts on-time inbound within 7 days, but not late or far-off shipments', () => {
+  it('counts inbound expected within 7 days, but not far-off or overdue ETAs', () => {
     const item = inv({ onHand: 4, safetyStock: 10 });
     expect(types([ship({ qty: 6, plannedArrival: '2026-11-09', eta: '2026-11-09' })], [item])).toEqual([]);
     expect(types([ship({ qty: 6, plannedArrival: '2026-11-10', eta: '2026-11-10' })], [item])).toEqual(['LOW_STOCK:high']);
-    const risks = types([ship({ qty: 6, plannedArrival: '2026-11-01', eta: '2026-11-03' })], [item]);
-    expect(risks).toContain('LOW_STOCK:high');
+    // Late against plan but re-scheduled with an ETA inside the window: still inbound.
+    expect(types([ship({ qty: 6, plannedArrival: '2026-11-01', eta: '2026-11-03' })], [item])).not.toContain('LOW_STOCK:high');
+    // ETA already passed without arrival: overdue, not inbound.
+    expect(types([ship({ qty: 6, plannedArrival: '2026-11-05', eta: '2026-10-30' })], [item])).toEqual(['LOW_STOCK:high']);
+  });
+  it('matches warehouse and SKU case-insensitively', () => {
+    const item = inv({ sku: 'sku-1', warehouse: ' tashkent ', onHand: 4, safetyStock: 10 });
+    expect(types([ship({ sku: 'SKU-1', warehouse: 'Tashkent', qty: 6, plannedArrival: '2026-11-04', eta: '2026-11-04' })], [item])).toEqual([]);
+  });
+  it('does not flag items that are deliberately not stocked', () => {
+    expect(types([], [inv({ onHand: 0, safetyStock: 0 })])).toEqual([]);
   });
   it('flags a stock-out today as critical even when inbound covers safety stock', () => {
     const item = inv({ onHand: 12, reserved: 12, safetyStock: 50 });
@@ -108,6 +117,12 @@ describe('computeKpis', () => {
     const inventory = [inv({ onHand: 4, safetyStock: 10, unitCost: 2.5 })];
     const k = computeKpis(shipments, inventory, evaluateRisks(shipments, inventory, TODAY), TODAY);
     expect(k).toMatchObject({ shipmentsTotal: 3, shipmentsDelivered: 2, shipmentsLate: 1, onTimeRate: 0.5, skusBelowSafety: 1, valueAtRisk: 15 });
+  });
+  it('counts stock-outs in skusBelowSafety exactly like the LOW_STOCK rule', () => {
+    const shipments = [ship({ qty: 140, plannedArrival: '2026-11-06', eta: '2026-11-06' })];
+    const inventory = [inv({ onHand: 12, reserved: 12, safetyStock: 50 })];
+    const risks = evaluateRisks(shipments, inventory, TODAY);
+    expect(computeKpis(shipments, inventory, risks, TODAY).skusBelowSafety).toBe(risks.filter((r) => r.type === 'LOW_STOCK').length);
   });
   it('reports null on-time rate when nothing is delivered', () => {
     expect(computeKpis([], [], [], TODAY).onTimeRate).toBeNull();

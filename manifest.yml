@@ -18,3 +18,5 @@ app:
 permissions:
   scopes:
     - storage:app
+    # Only for the server-side ADMINISTER check on data-changing actions (GET /rest/api/3/mypermissions).
+    - read:jira-work

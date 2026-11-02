@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { Severity, Shipment } from './api';
 import { SEVERITY_LABEL, STATUS_LABEL } from './format';
 
@@ -53,10 +53,11 @@ export function BarList({ data, ariaLabel }: { data: BarDatum[]; ariaLabel: stri
 }
 
 export function Panel({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
+  const headingId = useId();
   return (
-    <section className="panel" aria-label={title}>
+    <section className="panel" aria-labelledby={headingId}>
       <header className="panel-head">
-        <h2>{title}</h2>
+        <h2 id={headingId}>{title}</h2>
         {actions}
       </header>
       {children}

@@ -9,7 +9,10 @@ import {
   type ShipmentStatus,
 } from './types';
 
-export const MAX_ROWS = 5000;
+/** Keeps every resolver response (full lists with risk evidence) well inside Forge payload limits. */
+export const MAX_ROWS = 2000;
+/** Upper bound for quantities and costs; protects sums from overflow and absurd values. */
+export const MAX_NUMBER = 1_000_000_000;
 export const MAX_ERRORS_REPORTED = 200;
 const MAX_TEXT = 200;
 /** Warehouse is part of the inventory storage key, so it is kept short. */
@@ -52,6 +55,10 @@ export function importCsv(text: string): ImportResult {
         message: 'Unrecognised header: expected a shipments file (shipment_id, …) or an inventory file (sku, warehouse, on_hand, …)',
       }],
     };
+  }
+  const duplicates = table.header.filter((h, i) => h !== '' && table.header.indexOf(h) !== i);
+  if (duplicates.length > 0) {
+    return { ok: false, errors: [{ line: 1, field: null, message: `Duplicate column(s): ${[...new Set(duplicates)].join(', ')}` }] };
   }
   const required = kind === 'shipments' ? SHIPMENT_REQUIRED : INVENTORY_REQUIRED;
   const missing = required.filter((c) => !table.header.includes(c));
@@ -118,7 +125,13 @@ class Row {
     private readonly header: string[],
     private readonly cells: string[],
     readonly line: number,
-  ) {}
+  ) {
+    // Fewer cells is fine (trailing optional columns left blank); more means an unquoted comma shifted the row.
+    const extra = cells.slice(header.length).filter((c) => c.trim() !== '');
+    if (extra.length > 0) {
+      this.errors.push({ line, field: null, message: `Row has ${cells.length} values but the header has ${header.length} columns (unquoted comma?)` });
+    }
+  }
 
   private raw(field: string): string {
     const idx = this.header.indexOf(field);
@@ -150,7 +163,8 @@ class Row {
     }
     if (!/^-?\d+$/.test(v)) return this.fail(field, `"${v.slice(0, 20)}" is not a whole number`);
     const n = Number(v);
-    return n < opts.min ? this.fail(field, `must be at least ${opts.min}`) : n;
+    if (n < opts.min) return this.fail(field, `must be at least ${opts.min}`);
+    return n > MAX_NUMBER ? this.fail(field, `must be at most ${MAX_NUMBER}`) : n;
   }
 
   decimal(field: string): number | null {
@@ -158,7 +172,7 @@ class Row {
     if (!v) return null;
     const n = Number(v);
     if (!/^\d+(\.\d+)?$/.test(v) || !Number.isFinite(n)) return this.fail(field, `"${v.slice(0, 20)}" is not a valid non-negative number`);
-    return n;
+    return n > MAX_NUMBER ? this.fail(field, `must be at most ${MAX_NUMBER}`) : n;
   }
 
   date(field: string, required: boolean): string | null {

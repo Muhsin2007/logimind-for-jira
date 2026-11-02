@@ -1,4 +1,4 @@
-import { useCallback, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Dashboard } from './views/Dashboard';
 import { ImportSettings } from './views/ImportSettings';
 import { Inventory } from './views/Inventory';
@@ -37,19 +37,29 @@ export function App() {
   const [shipmentId, setShipmentId] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
 
-  const nav: NavProps = {
-    dataVersion,
-    onOpenShipment: setShipmentId,
-    onNavigate: setTab,
-    onDataChanged: useCallback(() => setDataVersion((v) => v + 1), []),
-  };
+  const onDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
+  const nav = useMemo<NavProps>(
+    () => ({ dataVersion, onOpenShipment: setShipmentId, onNavigate: setTab, onDataChanged }),
+    [dataVersion, onDataChanged],
+  );
   const closeDrawer = useCallback(() => setShipmentId(null), []);
 
+  // While the drawer is open the page behind it is inert (React 18 has no `inert` prop).
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (panel.current) panel.current.inert = shipmentId !== null;
+  }, [shipmentId]);
+
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!delta) return;
+    const target: Record<string, number> = {
+      ArrowRight: (index + 1) % TABS.length,
+      ArrowLeft: (index - 1 + TABS.length) % TABS.length,
+      Home: 0,
+      End: TABS.length - 1,
+    };
+    if (!(e.key in target)) return;
     e.preventDefault();
-    const next = TABS[(index + delta + TABS.length) % TABS.length].id;
+    const next = TABS[target[e.key]].id;
     setTab(next);
     document.getElementById(`tab-${next}`)?.focus();
   };
@@ -61,7 +71,7 @@ export function App() {
       {/* Jira already renders the page title, so the app only adds a subtitle. */}
       <p className="muted app-head">Logistics risk, shipments and stock — inside Jira.</p>
 
-      <nav className="tabs" role="tablist" aria-label="LogiMind sections">
+      <div className="tabs" role="tablist" aria-label="LogiMind sections">
         {TABS.map((t, i) => (
           <button
             key={t.id}
@@ -78,11 +88,11 @@ export function App() {
             {t.label}
           </button>
         ))}
-      </nav>
+      </div>
 
-      <main id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      <div ref={panel} id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         <View {...nav} />
-      </main>
+      </div>
 
       {shipmentId && <ShipmentDrawer id={shipmentId} onClose={closeDrawer} />}
     </div>
