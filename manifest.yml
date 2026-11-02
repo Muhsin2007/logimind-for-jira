@@ -14,7 +14,6 @@ resources:
 app:
   runtime:
     name: nodejs24.x
-  # Filled in by `forge register`
-  id: ari:cloud:ecosystem::app/00000000-0000-0000-0000-000000000000
+  id: ari:cloud:ecosystem::app/0c416234-e118-4454-907e-04c39eaa2c70
 permissions:
   scopes: []
