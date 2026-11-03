@@ -5,6 +5,7 @@ import { App } from './App';
 import { I18nProvider } from './i18n';
 import { IssueContext } from './views/IssueContext';
 import './styles.css';
+import './styles/views.css';
 
 // Load Atlassian design tokens so the app follows Jira's light/dark theme.
 view.theme.enable().catch(() => {

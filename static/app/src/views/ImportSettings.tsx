@@ -1,14 +1,17 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { call, errorMessage, useAsync, type ImportKind, type ImportOutcome, type MappingProposal } from '../api';
-import { ErrorState, Loading, Panel } from '../components';
+import { Callout, ConfirmDialog, ErrorState, Loading, Panel } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
+import { Icon } from '../icons';
 import { ColumnMapping } from './ColumnMapping';
 import { JiraSettings } from './JiraSettings';
 
 const MAX_BYTES = 1_000_000;
 
 type Busy = null | 'upload' | 'demo' | 'clear' | 'map';
+type Step = 'upload' | 'validate' | 'map' | 'results';
+const STEPS: Step[] = ['upload', 'validate', 'map', 'results'];
 
 /** A file whose header was not recognised, waiting for the admin to confirm a column mapping. */
 interface PendingMapping {
@@ -19,9 +22,9 @@ interface PendingMapping {
   proposal: Extract<MappingProposal, { ok: true }>;
 }
 
-/** Header problems (unknown, missing or duplicate columns) can be fixed by mapping columns. */
 let nextPendingId = 1;
 
+/** Header problems (unknown, missing or duplicate columns) can be fixed by mapping columns. */
 const isHeaderProblem = (o: ImportOutcome) => !o.ok && o.errors.length > 0 && o.errors.every((e) => e.line === 1 && e.field === null);
 
 export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
@@ -36,9 +39,14 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [pending, setPending] = useState<PendingMapping[]>([]);
   const [pasted, setPasted] = useState('');
+  const [dragging, setDragging] = useState(false);
   const { t, fmt } = useI18n();
   // While a mapping waits for confirmation, new uploads are blocked so nothing is confirmed against the wrong file.
   const locked = busy !== null || !canManage || pending.length > 0;
+
+  // The step indicator follows what actually happened; "results" only once the server has answered.
+  const step: Step = busy === 'upload' ? 'validate' : pending.length > 0 || busy === 'map' ? 'map' : outcomes.length > 0 ? 'results' : 'upload';
+  const stepIndex = STEPS.indexOf(step);
 
   const run = async (kind: Busy, action: () => Promise<void>) => {
     setBusy(kind);
@@ -95,6 +103,17 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
     );
   };
 
+  const onDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = locked ? 'none' : 'copy';
+    if (!locked) setDragging(true);
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (!locked) upload(e.dataTransfer.files);
+  };
+
   const importPasted = () => importTexts([{ filename: 'pasted-from-excel.csv', read: () => Promise.resolve(pasted) }], () => setPasted(''));
 
   const confirmMapping = (item: PendingMapping, kind: ImportKind, mapping: (string | null)[]) =>
@@ -104,46 +123,77 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
       setPending((p) => p.filter((x) => x !== item));
     });
 
+  const clearAll = () =>
+    run('clear', async () => {
+      await call('clearData');
+      setOutcomes([]);
+      setConfirmClear(false);
+    });
+
   return (
     <div className="stack">
-      <Panel title={t.importTitle}>
-        <p>{t.importIntro}</p>
+      <Panel title={t.importTitle} icon="upload">
+        <ol className="stepper" aria-label={t.stepsLabel}>
+          {STEPS.map((s, i) => (
+            <li key={s} className={`step${i < stepIndex ? ' step-done' : i === stepIndex ? ' step-active' : ''}`} aria-current={i === stepIndex ? 'step' : undefined}>
+              <span className="step-num" aria-hidden="true">{i < stepIndex ? <Icon name="check" size={12} /> : i + 1}</span>
+              {t.steps[s]}
+            </li>
+          ))}
+        </ol>
+
+        <p className="muted small">{t.importIntro}</p>
         {access.status === 'ready' && !canManage && (
-          <p className="notice" role="note">{t.adminOnly}</p>
+          <Callout tone="warning" role="note" className="mt-3">{t.adminOnly}</Callout>
         )}
-        <div className="row">
-          <label htmlFor="csv-files" className="h4">{t.csvFiles}</label>
-          <input
-            id="csv-files"
-            ref={fileInput}
-            type="file"
-            accept=".csv,text/csv"
-            multiple
-            disabled={locked}
-            onChange={(e) => upload(e.target.files)}
-          />
-          {busy === 'upload' && <span className="muted">{t.importingAi}</span>}
-          {pending.length > 0 && busy === null && <span className="muted">{t.confirmMappingFirst}</span>}
+
+        <div
+          className={`dropzone mt-3${dragging ? ' dropzone-active' : ''}${locked ? ' dropzone-disabled' : ''}`}
+          onDragOver={onDragOver}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+        >
+          <span className="dropzone-icon"><Icon name="upload" size={20} /></span>
+          <span className="dropzone-title">{busy === 'upload' ? t.importingAi : t.dropTitle}</span>
+          <span>
+            {t.dropOr}{' '}
+            <input
+              id="csv-files"
+              ref={fileInput}
+              className="sr-only"
+              type="file"
+              accept=".csv,text/csv"
+              multiple
+              disabled={locked}
+              aria-describedby="csv-hint"
+              onChange={(e) => upload(e.target.files)}
+            />
+            <label htmlFor="csv-files" className="file-label">{t.browseFiles}</label>
+          </span>
+          <span id="csv-hint" className="dropzone-hint">{t.dropHint}</span>
+          {pending.length > 0 && busy === null && <span className="dropzone-hint">{t.confirmMappingFirst}</span>}
         </div>
-        <details>
-          <summary>{t.pasteSummary}</summary>
-          <label htmlFor="csv-paste" className="muted small">{t.pasteHelp}</label>
-          <textarea
-            id="csv-paste"
-            className="input paste-box"
-            rows={6}
-            value={pasted}
-            maxLength={MAX_BYTES}
-            disabled={locked}
-            onChange={(e) => setPasted(e.target.value)}
-          />
-          <div className="row">
+
+        <details className="disclosure mt-3">
+          <summary><Icon name="chevronDown" size={14} />{t.pasteSummary}</summary>
+          <div className="disclosure-body">
+            <label htmlFor="csv-paste" className="muted small">{t.pasteHelp}</label>
+            <textarea
+              id="csv-paste"
+              className="input paste-box"
+              rows={6}
+              value={pasted}
+              maxLength={MAX_BYTES}
+              disabled={locked}
+              onChange={(e) => setPasted(e.target.value)}
+            />
             <button type="button" className="btn" disabled={locked || !pasted.trim()} onClick={importPasted}>
               {t.importPasted}
             </button>
           </div>
         </details>
-        {error && <p role="alert" className="text-danger">{error}</p>}
+
+        {error && <Callout tone="danger" role="alert" className="mt-3">{error}</Callout>}
         {pending.map((item) => (
           <ColumnMapping
             key={item.id}
@@ -162,93 +212,126 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
       </Panel>
 
       <div className="grid-2">
-        <Panel title={t.fileFormats}>
-          <h3 className="h4">{t.formatShipments}</h3>
-          <p className="mono small wrap">shipment_id*, order_id, supplier*, sku*, product_name, qty*, planned_arrival*, eta, actual_arrival, status*, warehouse*, carrier, tracking_ref</p>
-          <h3 className="h4">{t.formatInventory}</h3>
-          <p className="mono small wrap">sku*, product_name, warehouse*, on_hand*, reserved, inbound_qty, safety_stock*, unit_cost, daily_usage, updated_at</p>
-          <p className="muted small">{t.formatNote}</p>
+        <Panel title={t.fileFormats} icon="file">
+          <h3 className="field-label">{t.formatShipments}</h3>
+          <p className="format-code">shipment_id*, order_id, supplier*, sku*, product_name, qty*, planned_arrival*, eta, actual_arrival, status*, warehouse*, carrier, tracking_ref</p>
+          <h3 className="field-label">{t.formatInventory}</h3>
+          <p className="format-code">sku*, product_name, warehouse*, on_hand*, reserved, inbound_qty, safety_stock*, unit_cost, daily_usage, updated_at</p>
+          <p className="footnote">{t.formatNote}</p>
         </Panel>
 
-        <Panel title={t.demoTitle}>
-          <p>{t.demoText}</p>
-          <p className="muted small">{t.rowLimit}</p>
-          <div className="row">
-            <button type="button" className="btn btn-primary" disabled={busy !== null || !canManage} onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}>
-              {busy === 'demo' ? t.loading : t.loadDemo}
+        <Panel title={t.demoTitle} icon="database">
+          <p className="muted">{t.demoText}</p>
+          <p className="footnote">{t.rowLimit}</p>
+          <div className="row mt-3">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy !== null || !canManage}
+              onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}
+            >
+              <Icon name="database" size={14} /> {busy === 'demo' ? t.loading : t.loadDemo}
             </button>
-            {!confirmClear ? (
-              <button type="button" className="btn btn-danger-subtle" disabled={busy !== null || !canManage} onClick={() => setConfirmClear(true)}>
-                {t.deleteAll}
-              </button>
-            ) : (
-              <span className="confirm" role="group" aria-label={t.confirmDelete}>
-                <span>{t.deleteQuestion}</span>
-                <button type="button" className="btn btn-danger" disabled={busy !== null} onClick={() => run('clear', async () => { await call('clearData'); setOutcomes([]); setConfirmClear(false); })}>
-                  {busy === 'clear' ? t.deleting : t.delete}
-                </button>
-                <button type="button" className="btn" onClick={() => setConfirmClear(false)}>{t.cancel}</button>
-              </span>
-            )}
+          </div>
+          <div className="danger-row">
+            <div>
+              <strong className="small">{t.dangerZone}</strong>
+              <p className="footnote danger-text">{t.deleteQuestion}</p>
+            </div>
+            <button type="button" className="btn btn-danger-subtle" disabled={busy !== null || !canManage} onClick={() => setConfirmClear(true)}>
+              <Icon name="trash" size={14} /> {t.deleteAll}
+            </button>
           </div>
         </Panel>
       </div>
 
+      <ConfirmDialog
+        open={confirmClear}
+        title={t.deleteTitle}
+        confirmLabel={busy === 'clear' ? t.deleting : t.delete}
+        busy={busy === 'clear'}
+        onConfirm={() => void clearAll()}
+        onCancel={() => setConfirmClear(false)}
+      >
+        <p>{t.deleteQuestion}</p>
+        {error && busy === null && <p role="alert" className="text-danger small">{error}</p>}
+      </ConfirmDialog>
+
       {access.status === 'ready' && <JiraSettings canManage={canManage} dataVersion={dataVersion} onDataChanged={onDataChanged} />}
 
-      <Panel title={t.importHistory}>
-        {history.status === 'loading' && <Loading />}
+      <Panel title={t.importHistory} icon="clock">
+        {history.status === 'loading' && <Loading variant="inline" />}
         {history.status === 'error' && <ErrorState message={history.message} onRetry={history.reload} />}
         {history.status === 'ready' && (history.data.length === 0 ? (
           <p className="muted">{t.noImportsYet}</p>
         ) : (
-          <table className="table compact">
-            <thead>
-              <tr><th>{t.colFile}</th><th>{t.colType}</th><th>{t.colImported}</th><th className="num">{t.colRows}</th><th className="num">{t.colValid}</th><th className="num">{t.colRejected}</th></tr>
-            </thead>
-            <tbody>
-              {history.data.map((b) => (
-                <tr key={b.id}>
-                  <td>{b.filename}</td><td>{t.importKind[b.kind]}</td><td>{fmt.dateTime(b.importedAt)}</td>
-                  <td className="num">{b.rowsTotal}</td><td className="num">{b.rowsValid}</td>
-                  <td className="num">{b.rowsRejected > 0 ? <span className="text-danger">{b.rowsRejected}</span> : 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="table compact">
+              <thead>
+                <tr><th>{t.colFile}</th><th>{t.colType}</th><th>{t.colImported}</th><th className="num">{t.colRows}</th><th className="num">{t.colValid}</th><th className="num">{t.colRejected}</th></tr>
+              </thead>
+              <tbody>
+                {history.data.map((b) => (
+                  <tr key={b.id}>
+                    <td className="cell-main">{b.filename}</td>
+                    <td><span className="badge badge-neutral">{t.importKind[b.kind]}</span></td>
+                    <td className="muted">{fmt.dateTime(b.importedAt)}</td>
+                    <td className="num">{fmt.number(b.rowsTotal)}</td>
+                    <td className="num">{fmt.number(b.rowsValid)}</td>
+                    <td className="num">{b.rowsRejected > 0 ? <span className="text-danger">{fmt.number(b.rowsRejected)}</span> : <span className="muted">0</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ))}
       </Panel>
     </div>
   );
 }
 
+/** One file's server answer; success is shown only when the server reports imported rows. */
 function ImportResult({ filename, outcome }: { filename: string; outcome: ImportOutcome }) {
   const { t } = useI18n();
   const errors = outcome.ok ? outcome.batch.errors : outcome.errors;
+  const tone = !outcome.ok || outcome.batch.rowsValid === 0 ? 'fail' : outcome.batch.rowsRejected > 0 ? 'warn' : 'ok';
+  const title = tone === 'ok' ? t.resultOk : tone === 'warn' ? t.resultPartial : t.resultFailed;
+  // Row-level problems (line > 1) can be fixed in the file; file-level ones are explained by the message.
+  const fixable = errors.some((e) => e.line > 1);
   return (
-    <div className={`result ${outcome.ok && outcome.batch.rowsRejected === 0 ? 'result-ok' : 'result-warn'}`}>
-      <strong>{filename}: </strong>
-      {outcome.ok ? (
-        <>
-          {t.importedRows(outcome.batch.rowsValid, outcome.batch.rowsTotal, t.importKind[outcome.batch.kind])}
-          {outcome.batch.rowsRejected > 0 && t.rejectedRows(outcome.batch.rowsRejected)}.
-          {!outcome.replaced && t.keptExisting}
-        </>
-      ) : (
-        t.notImported
-      )}
+    <div className={`result-card result-${tone}`}>
+      <div className="result-head">
+        <Icon name={tone === 'ok' ? 'checkCircle' : tone === 'warn' ? 'alert' : 'alertCircle'} />
+        <div className="result-text">
+          <strong>{title} · <span className="mono">{filename}</span></strong>
+          <span className="muted small">
+            {outcome.ok ? (
+              <>
+                {t.importedRows(outcome.batch.rowsValid, outcome.batch.rowsTotal, t.importKind[outcome.batch.kind])}
+                {outcome.batch.rowsRejected > 0 && t.rejectedRows(outcome.batch.rowsRejected)}.
+                {!outcome.replaced && t.keptExisting}
+              </>
+            ) : (
+              t.notImported
+            )}
+          </span>
+        </div>
+      </div>
       {errors.length > 0 && (
-        <table className="table compact errors">
-          <thead><tr><th className="num">{t.colLine}</th><th>{t.colField}</th><th>{t.colProblem}</th></tr></thead>
-          <tbody>
-            {errors.map((e, i) => (
-              <tr key={`${e.line}-${e.field}-${i}`}>
-                <td className="num">{e.line || '—'}</td><td className="mono">{e.field ?? '—'}</td><td>{e.message}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-wrap">
+          <table className="table compact">
+            <thead><tr><th className="num">{t.colLine}</th><th>{t.colField}</th><th>{t.colProblem}</th></tr></thead>
+            <tbody>
+              {errors.map((e, i) => (
+                <tr key={`${e.line}-${e.field}-${i}`}>
+                  <td className="num">{e.line || '—'}</td><td className="mono">{e.field ?? '—'}</td><td>{e.message}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
+      {fixable && <p className="result-fix">{t.howToFix}</p>}
     </div>
   );
 }

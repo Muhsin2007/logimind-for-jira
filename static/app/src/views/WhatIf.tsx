@@ -1,7 +1,7 @@
 import { useDeferredValue, useId, useMemo, useState, type ReactNode } from 'react';
 import { delayCandidates, MAX_DELAY_DAYS, simulateDelay, type StockOutlook } from '../../../../src/domain/what-if';
 import { call, useAsync } from '../api';
-import { CoverValue, EmptyState, ErrorState, Loading, Panel, SeverityBadge } from '../components';
+import { Callout, CoverValue, EmptyState, ErrorState, Loading, Panel, Segmented, SeverityBadge } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
 
@@ -37,10 +37,10 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
     return simulateDelay(state.data.shipments, state.data.items, state.data.today, scenario);
   }, [state, mode, selectedId, selectedSupplier, deferredDelay]);
 
-  if (state.status === 'loading') return <Loading label={t.loadingWhatIf} />;
+  if (state.status === 'loading') return <Loading label={t.loadingWhatIf} variant="inline" />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={state.reload} />;
-  if (state.data.shipments.length === 0 || state.data.items.length === 0) return <EmptyState title={t.whatIfNoData} />;
-  if (!candidates || candidates.shipments.length === 0 || !result) return <EmptyState title={t.noUpcoming} />;
+  if (state.data.shipments.length === 0 || state.data.items.length === 0) return <EmptyState title={t.whatIfNoData} icon="sliders" />;
+  if (!candidates || candidates.shipments.length === 0 || !result) return <EmptyState title={t.noUpcoming} icon="sliders" />;
 
   const worse = result.rows.filter((r) => r.worse).length;
   const delayText = t.delayDays(result.delayDays);
@@ -49,23 +49,26 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
 
   return (
     <div className="stack">
-      <p className="notice" role="note">{t.whatIfIntro}</p>
+      <Callout tone="info" role="note">{t.whatIfIntro}</Callout>
 
-      <Panel title={t.tabs.whatIf}>
+      <Panel title={t.scenario} icon="sliders">
         <div className="whatif-controls">
-          <fieldset className="radio-group">
-            <legend className="h4">{t.delayWhat}</legend>
-            {(['shipment', 'supplier'] as const).map((m) => (
-              <label key={m} className="checkbox">
-                <input type="radio" name={`${ids}-mode`} value={m} checked={mode === m} onChange={() => setMode(m)} />
-                {m === 'shipment' ? t.modeShipment : t.modeSupplier}
-              </label>
-            ))}
-          </fieldset>
+          <div className="field">
+            <span className="field-label">{t.delayWhat}</span>
+            <Segmented<Mode>
+              label={t.delayWhat}
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'shipment', label: t.modeShipment },
+                { value: 'supplier', label: t.modeSupplier },
+              ]}
+            />
+          </div>
 
           {mode === 'shipment' ? (
             <label className="field">
-              <span className="h4">{t.chooseShipment}</span>
+              <span className="field-label">{t.chooseShipment}</span>
               <select className="input" value={selectedId} onChange={(e) => setShipmentId(e.target.value)}>
                 {candidates.shipments.map((s) => (
                   <option key={s.id} value={s.id}>{t.shipmentOption(s.id, s.sku, s.warehouse, fmt.date(s.eta ?? s.plannedArrival))}</option>
@@ -74,7 +77,7 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
             </label>
           ) : (
             <label className="field">
-              <span className="h4">{t.chooseSupplier}</span>
+              <span className="field-label">{t.chooseSupplier}</span>
               <select className="input" value={selectedSupplier} onChange={(e) => setSupplier(e.target.value)}>
                 {candidates.suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -82,7 +85,10 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
           )}
 
           <div className="field slider-field">
-            <label htmlFor={`${ids}-delay`} className="h4">{t.delayBy}</label>
+            <div className="slider-head">
+              <label htmlFor={`${ids}-delay`} className="field-label">{t.delayBy}</label>
+              <output htmlFor={`${ids}-delay`} className="slider-value">{t.delayDays(delay)}</output>
+            </div>
             <input
               id={`${ids}-delay`}
               type="range"
@@ -93,27 +99,34 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
               aria-valuetext={t.delayDays(delay)}
               onChange={(e) => setDelay(Number(e.target.value))}
             />
-            <output htmlFor={`${ids}-delay`} className="slider-value">{t.delayDays(delay)}</output>
+            <div className="slider-scale" aria-hidden="true"><span>0</span><span>{MAX_DELAY_DAYS}</span></div>
           </div>
         </div>
 
-        {preselectMissing && <p className="notice" role="note">{t.notUpcoming(whatIfShipmentId)}</p>}
-        <p className="whatif-summary" aria-live="polite">
-          {result.delayDays === 0 ? t.moveSlider : worse > 0 ? <strong className="text-danger">{t.summaryWorse(worse, delayText)}</strong> : t.summaryNone(delayText)}
-        </p>
+        {preselectMissing && <Callout tone="warning" role="note" className="whatif-result">{t.notUpcoming(whatIfShipmentId)}</Callout>}
+        <div className="whatif-result" aria-live="polite">
+          {result.delayDays === 0 ? (
+            <Callout tone="info">{t.moveSlider}</Callout>
+          ) : worse > 0 ? (
+            <Callout tone="danger" title={t.summaryWorse(worse, delayText)} />
+          ) : (
+            <Callout tone="success" title={t.summaryNone(delayText)} />
+          )}
+        </div>
 
-        <h3 className="h4">{t.delayedShipments}</h3>
-        <ul className="plain-list">
+        <h3 className="field-label whatif-result">{t.delayedShipments}</h3>
+        <ul className="shipment-list">
           {result.shipments.map((s) => (
             <li key={s.id}>
-              <span className="mono">{s.id}</span> · {fmt.number(s.qty)} × <span className="mono">{s.sku}</span> → {s.warehouse}:{' '}
-              {t.arrivalMove(fmt.date(s.from), fmt.date(s.to))}
+              <span className="id-chip mono">{s.id}</span>
+              <span>{fmt.number(s.qty)} × <span className="mono">{s.sku}</span> → {s.warehouse}</span>
+              <span className="muted">{t.arrivalMove(fmt.date(s.from), fmt.date(s.to))}</span>
             </li>
           ))}
         </ul>
       </Panel>
 
-      <Panel title={t.impactTitle}>
+      <Panel title={t.impactTitle} icon="warehouse">
         {result.rows.length > 0 && (
           <div className="table-wrap">
             <table className="table">
@@ -126,7 +139,7 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
               <tbody>
                 {result.rows.map((r) => (
                   <tr key={r.entityKey} className={r.worse ? 'row-worse' : undefined}>
-                    <td className="mono">{r.sku}</td>
+                    <td className="mono cell-main">{r.sku}</td>
                     <td>{r.warehouse}</td>
                     <td className="num">{fmt.number(r.safetyStock)}</td>
                     <td><Compare before={r.before} after={r.after} render={(o) => (o.lowStock ? <SeverityBadge severity={o.lowStock} /> : <span className="muted">{t.okLevel}</span>)} /></td>
@@ -139,8 +152,8 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
             </table>
           </div>
         )}
-        {result.untracked.length > 0 && <p className="muted small">{t.untracked(result.untracked.join(', '))}</p>}
-        <p className="muted small">{t.coverNote}</p>
+        {result.untracked.length > 0 && <p className="footnote">{t.untracked(result.untracked.join(', '))}</p>}
+        <p className="footnote">{t.coverNote}</p>
       </Panel>
     </div>
   );
@@ -152,7 +165,7 @@ function Compare({ before, after, render }: { before: StockOutlook; after: Stock
   return (
     <span className="compare">
       <span><span className="sr-only">{t.today}: </span>{render(before)}</span>
-      <span aria-hidden="true" className="muted"> → </span>
+      <span aria-hidden="true" className="subtlest">→</span>
       <span><span className="sr-only">{t.withDelay}: </span>{render(after)}</span>
     </span>
   );

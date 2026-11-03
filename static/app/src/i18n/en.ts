@@ -1,4 +1,22 @@
 import type { RiskEvent } from '../../../../src/shared/api';
+import type { Formatters } from '../format';
+
+/** A value from a risk's rule evidence (labels are fixed by the rule engine). */
+export const ev = (risk: RiskEvent, label: string): string | number | null => risk.evidence.find((e) => e.label === label)?.value ?? null;
+export const num = (risk: RiskEvent, label: string): number | null => {
+  const value = ev(risk, label);
+  return typeof value === 'number' ? value : null;
+};
+export const str = (risk: RiskEvent, label: string): string => String(ev(risk, label) ?? '—');
+const daysEn = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
+const STATUS_EN = {
+  planned: 'Planned',
+  confirmed: 'Confirmed',
+  in_transit: 'In transit',
+  customs: 'Customs',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+};
 
 /**
  * English UI text: the default language and the reference for every other dictionary.
@@ -28,14 +46,7 @@ export const en = {
   ofTotal: (shown: number, total: number) => `${shown} of ${total}`,
 
   severity: { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' },
-  status: {
-    planned: 'Planned',
-    confirmed: 'Confirmed',
-    in_transit: 'In transit',
-    customs: 'Customs',
-    delivered: 'Delivered',
-    cancelled: 'Cancelled',
-  },
+  status: STATUS_EN,
   riskType: { LATE_SHIPMENT: 'Late shipment', ETA_SLIP: 'ETA slip', MISSING_ETA: 'Missing ETA', LOW_STOCK: 'Low stock' },
   importKind: { shipments: 'shipments', inventory: 'inventory' },
   /** Risk evidence labels exactly as the rule engine produces them. */
@@ -369,6 +380,146 @@ export const en = {
   save: 'Save',
   saving: 'Saving…',
   savedConfig: (project: string, type: string) => `Saved: new issues go to ${project} as ${type}.`,
+  // Shell and shared components (redesign)
+  pageDesc: {
+    dashboard: 'What needs attention across shipments and stock, from the latest rule evaluation.',
+    shipments: 'Every imported shipment with its status, arrival dates and open risks.',
+    inventory: 'Stock per SKU and warehouse: available, inbound, safety stock and days of cover.',
+    whatIf: 'Simulate a shipment or supplier delay and see which stock positions get worse.',
+    risks: 'Open risks from the deterministic rules: why each one matters and what to do next.',
+    copilot: 'Ask about shipments, stock and risks in plain language; every answer cites your records.',
+    import: 'Bring in CSV files, manage the dataset and choose where Jira issues are created.',
+  },
+  moreInfo: 'What this number means',
+
+  // Dashboard (redesign)
+  attentionTitle: (n: number) => (n === 1 ? '1 critical or high risk needs attention' : `${n} critical or high risks need attention`),
+  attentionText: (critical: number, high: number) => `${critical} critical · ${high} high. Start with the top risks below.`,
+  allClearTitle: 'No critical or high risks',
+  allClearText: 'Shipments and stock pass the rules at the critical and high levels.',
+  reviewRisks: 'Review risks',
+  kpiInfoOpen: 'Shipments that are not delivered or cancelled and have no actual arrival date.',
+  kpiInfoLate: 'Open shipments whose planned arrival date is before today. A later ETA does not reset this.',
+  kpiInfoOnTime: 'Share of delivered shipments that arrived on or before their planned arrival date.',
+  kpiInfoBelowSafety: 'Stock positions (a SKU at a warehouse) whose projected stock — available plus inbound due within 7 days — is below safety stock.',
+  kpiInfoValue: 'Unit cost × units missing to reach safety stock, summed over positions that have a unit cost in the file. The currency is the one used in the file.',
+  noDeliveriesYet: 'no delivered shipments yet',
+  riskDistribution: 'Risk distribution',
+  viewAll: 'View all',
+  viewShipmentsLink: 'Shipments',
+  viewStockLink: 'Inventory',
+
+  // Shipments (redesign)
+  filterRisk: 'Filter by risk',
+  riskFilterAll: 'All',
+  riskFilterAt: 'At risk',
+  riskFilterNone: 'No risk',
+  etaSlip: (n: number) => `+${n} d`,
+  etaSlipTitle: (n: number) => `ETA is ${daysEn(n)} after the planned date`,
+  clearFilters: 'Clear filters',
+
+  // Shipment drawer (redesign)
+  secOverview: 'Overview',
+  secSupplier: 'Supplier and carrier',
+  secTimeline: 'Delivery timeline',
+  secImpact: 'Warehouse and inventory impact',
+  secRisks: 'Related risks and Jira issues',
+  timelinePlanned: 'Planned arrival',
+  timelineEta: 'Latest ETA',
+  timelineActual: 'Received',
+  timelineNoEta: 'No ETA in the data',
+  timelineNotYet: 'Not received yet',
+  vsPlan: (days: number) => (days === 0 ? 'on the planned date' : days > 0 ? `${daysEn(days)} after plan` : `${daysEn(-days)} before plan`),
+
+  // Inventory (redesign)
+  sumPositions: 'Stock positions',
+  sumCritical: 'No stock available',
+  sumBelow: 'Below safety stock',
+  sumNoUsage: 'Without daily usage',
+  stockFilter: 'Filter stock positions',
+  stockFilterAll: 'All',
+  onHandReserved: (onHand: string, reserved: string) => `${onHand} on hand · ${reserved} reserved`,
+  inboundVia: (ids: string) => `via ${ids}`,
+  colProjectedVsSafety: 'Projected / safety',
+
+  // Risk Center (redesign): sentences use only the rule's own evidence
+  riskWhy: 'Why it matters',
+  riskImpact: 'Business impact',
+  riskNextStep: 'Next step',
+  riskEvidence: 'Rule evidence',
+  whyText: (r: RiskEvent, fmt: Formatters): string => {
+    const n = num(r, r.type === 'LATE_SHIPMENT' ? 'Days late' : r.type === 'ETA_SLIP' ? 'Slip (days)' : 'Days to planned arrival');
+    switch (r.type) {
+      case 'LATE_SHIPMENT':
+        return `Planned to arrive on ${fmt.date(str(r, 'Planned arrival'))} and still not delivered${n === null ? '' : ` — ${daysEn(n)} late`}.`;
+      case 'ETA_SLIP':
+        return `The latest ETA (${fmt.date(str(r, 'ETA'))}) is ${n === null ? 'later than' : `${daysEn(n)} after`} the planned date (${fmt.date(str(r, 'Planned arrival'))}).`;
+      case 'MISSING_ETA': {
+        const status = STATUS_EN[ev(r, 'Status') as keyof typeof STATUS_EN] ?? str(r, 'Status');
+        const when = n === null ? '' : n >= 0 ? `; planned arrival is in ${daysEn(n)}` : `; planned arrival was ${daysEn(-n)} ago`;
+        return `${status} with no ETA in the data${when}.`;
+      }
+      default: {
+        const available = num(r, 'Available');
+        return available !== null && available <= 0
+          ? `Nothing is available now: ${fmt.number(num(r, 'On hand') ?? 0)} on hand, ${fmt.number(num(r, 'Reserved') ?? 0)} reserved.`
+          : `Projected stock (${fmt.number(num(r, 'Projected') ?? 0)}) is below the safety stock of ${fmt.number(num(r, 'Safety stock') ?? 0)}.`;
+      }
+    }
+  },
+  impactText: (r: RiskEvent, fmt: Formatters): string => {
+    const qty = num(r, 'Qty');
+    const units = `${qty === null ? '' : `${fmt.number(qty)} units of `}${str(r, 'SKU')}`;
+    switch (r.type) {
+      case 'LATE_SHIPMENT':
+        return `${units} from ${str(r, 'Supplier')} are not in the warehouse when planned.`;
+      case 'ETA_SLIP':
+        return `${units} arrive later than planned; stock that counts on them is short until then.`;
+      case 'MISSING_ETA':
+        return `${units} have no expected date, so they cannot be planned into stock.`;
+      default: {
+        const available = num(r, 'Available');
+        const gap = (num(r, 'Safety stock') ?? 0) - (num(r, 'Projected') ?? 0);
+        if (available !== null && available <= 0) return 'Demand at this warehouse cannot be served from stock until inbound stock arrives.';
+        return gap > 0 ? `${fmt.number(gap)} units short of safety stock, even after inbound due within 7 days.` : 'Stock is below the safety level.';
+      }
+    }
+  },
+  nextText: (r: RiskEvent): string => {
+    switch (r.type) {
+      case 'LATE_SHIPMENT':
+        return `Contact ${str(r, 'Supplier')} for a confirmed delivery date and update the ETA.`;
+      case 'ETA_SLIP':
+        return `Check which orders depend on ${str(r, 'SKU')} and whether the later ETA delays them.`;
+      case 'MISSING_ETA':
+        return `Ask ${str(r, 'Supplier')} or the carrier for an ETA.`;
+      default: {
+        const inbound = ev(r, 'Inbound shipments');
+        return inbound
+          ? `Prioritise receiving ${inbound}; if that is not enough, transfer stock or raise a replenishment order.`
+          : 'Raise a replenishment order or transfer stock from another warehouse.';
+      }
+    }
+  },
+
+  // Import (redesign)
+  stepsLabel: 'Import steps',
+  steps: { upload: 'Upload', validate: 'Validate', map: 'Map columns', results: 'Results' },
+  dropTitle: 'Drag and drop CSV files here',
+  dropOr: 'or',
+  browseFiles: 'choose files',
+  dropHint: 'Shipments or inventory · UTF-8 CSV · up to 1 MB and 2,000 rows per file',
+  howToFix: 'How to fix: correct these lines in your file (line 1 is the header) and import it again. An import replaces all data of that type, so the corrected file is used as a whole.',
+  resultOk: 'Imported',
+  resultPartial: 'Imported with rejected rows',
+  resultFailed: 'Not imported',
+  dangerZone: 'Danger zone',
+  deleteTitle: 'Delete all LogiMind data?',
+
+  // Copilot and sidebar (redesign)
+  yourQuestion: 'Question',
+  scenario: 'Scenario',
+  sidebarRisk: 'LogiMind risk',
 };
 
 export type Messages = typeof en;

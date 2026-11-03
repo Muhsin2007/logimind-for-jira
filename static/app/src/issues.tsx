@@ -2,6 +2,7 @@ import { router } from '@forge/bridge';
 import { useState } from 'react';
 import { call, errorMessage, useAsync, type IssueLinkView, type IssueLinksData, type JiraConfig, type RiskEvent } from './api';
 import { useI18n } from './i18n';
+import { Icon } from './icons';
 
 /** Live issue links keyed by risk ID; `reload` after creating an issue. */
 export function useIssueLinks(dataVersion: number) {
@@ -16,7 +17,8 @@ export function IssueKeyLink({ link }: { link: IssueLinkView }) {
   const open = () => void router.open(`/browse/${link.issueKey}`).catch(() => undefined);
   return (
     <span className="issue-link">
-      <button type="button" className="link mono" onClick={open} title={t.openInJira}>
+      <button type="button" className="link mono issue-key" onClick={open} title={t.openInJira}>
+        <Icon name="link" size={14} />
         {link.issueKey}
       </button>
       {link.status ? (
@@ -69,24 +71,24 @@ export function IssueAction({ risk, link, config, onChanged }: { risk: RiskEvent
   return (
     <span className="issue-action">
       {!confirming ? (
-        <button type="button" className="btn" onClick={() => setConfirming(true)} disabled={busy}>
-          {t.createIssue}
+        <button type="button" className="btn btn-sm" onClick={() => setConfirming(true)} disabled={busy}>
+          <Icon name="link" size={14} /> {t.createIssue}
         </button>
       ) : (
         <span className="confirm" role="group" aria-label={t.confirmIssue}>
           <span className="small">
             {t.createIssueIn(config.issueTypeName, config.projectName, config.projectKey)}
           </span>
-          <button type="button" className="btn btn-primary" onClick={create} disabled={busy}>
+          <button type="button" className="btn btn-sm btn-primary" onClick={create} disabled={busy}>
             {busy ? t.creating : t.create}
           </button>
-          <button type="button" className="btn" onClick={() => setConfirming(false)} disabled={busy}>
+          <button type="button" className="btn btn-sm" onClick={() => setConfirming(false)} disabled={busy}>
             {t.cancel}
           </button>
         </span>
       )}
       {message && (
-        <span role={message.tone === 'error' ? 'alert' : 'status'} className={message.tone === 'error' ? 'text-danger small' : 'small'}>
+        <span role={message.tone === 'error' ? 'alert' : 'status'} className={message.tone === 'error' ? 'text-danger small' : 'text-success small'}>
           {message.text}
         </span>
       )}

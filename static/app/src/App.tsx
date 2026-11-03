@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { UiLocale } from './api';
 import { LOCALE_NAMES, useI18n } from './i18n';
+import { Icon, LogoMark, type IconName } from './icons';
 import { Copilot } from './views/Copilot';
 import { Dashboard } from './views/Dashboard';
 import { ImportSettings } from './views/ImportSettings';
@@ -23,6 +24,16 @@ export interface NavProps {
 }
 
 const TABS: Tab[] = ['dashboard', 'shipments', 'inventory', 'whatIf', 'risks', 'copilot', 'import'];
+
+const TAB_ICONS: Record<Tab, IconName> = {
+  dashboard: 'dashboard',
+  shipments: 'truck',
+  inventory: 'box',
+  whatIf: 'sliders',
+  risks: 'alert',
+  copilot: 'sparkles',
+  import: 'upload',
+};
 
 const VIEWS: Record<Tab, (props: NavProps) => JSX.Element> = {
   dashboard: Dashboard,
@@ -84,11 +95,17 @@ export function App() {
 
   return (
     <div className="app">
-      <div className="app-head">
-        {/* Jira already renders the page title, so the app only adds a subtitle. */}
-        <p className="muted">{t.appSubtitle}</p>
+      <header className="topbar">
+        <div className="brand">
+          <LogoMark />
+          <div className="brand-text">
+            {/* Jira already renders the page title; the product name here is the app's identity. */}
+            <span className="brand-name">LogiMind</span>
+            <span className="brand-sub">{t.appSubtitle}</span>
+          </div>
+        </div>
         <LanguageSwitch />
-      </div>
+      </header>
 
       <div className="tabs" role="tablist" aria-label={t.sections}>
         {TABS.map((id, i) => (
@@ -104,12 +121,19 @@ export function App() {
             onClick={() => selectTab(id)}
             onKeyDown={(e) => onTabKey(e, i)}
           >
+            <Icon name={TAB_ICONS[id]} />
             {t.tabs[id]}
           </button>
         ))}
       </div>
 
       <div ref={panel} id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+        <div className="page-head">
+          <div>
+            <h1>{t.tabs[tab]}</h1>
+            <p>{t.pageDesc[tab]}</p>
+          </div>
+        </div>
         <View {...nav} />
       </div>
 
@@ -128,7 +152,7 @@ function LanguageSwitch() {
           key={l}
           type="button"
           lang={l}
-          className={`btn btn-subtle lang-btn${locale === l ? ' lang-active' : ''}`}
+          className="lang-btn"
           aria-pressed={locale === l}
           title={LOCALE_NAMES[l]}
           aria-label={LOCALE_NAMES[l]}

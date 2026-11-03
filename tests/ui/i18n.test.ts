@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { en } from '../../static/app/src/i18n/en';
 import { plural, ru } from '../../static/app/src/i18n/ru';
+import { formatters } from '../../static/app/src/format';
 import type { RiskEvent } from '../../src/domain/types';
 
 /** Every key path with the kind of value it holds, e.g. `tabs.copilot: string`. */
@@ -56,5 +57,31 @@ describe('UI dictionaries', () => {
       .toBe('SKU-04 на складе Samarkand: доступного остатка нет');
     expect(ru.riskTitle(risk({ evidence: [] }))).toBe('English title');
     expect(en.riskTitle(risk({}))).toBe('English title');
+  });
+
+  it('explains a risk only from its own evidence, in both languages', () => {
+    const late = risk({
+      evidence: [
+        { label: 'Days late', value: 3 }, { label: 'Supplier', value: 'Acme' }, { label: 'SKU', value: 'SKU-01' },
+        { label: 'Qty', value: 120 }, { label: 'Status', value: 'in_transit' }, { label: 'Planned arrival', value: '2026-10-30' }, { label: 'ETA', value: null },
+      ],
+    });
+    const low = risk({
+      type: 'LOW_STOCK', entityType: 'inventory', entityKey: 'SKU-02@Main',
+      evidence: [{ label: 'Available', value: 10 }, { label: 'Projected', value: 10 }, { label: 'Safety stock', value: 40 }, { label: 'Inbound shipments', value: null }],
+    });
+    const fmt = { en: formatters('en'), ru: formatters('ru') };
+    expect(en.whyText(late, fmt.en)).toBe('Planned to arrive on 30 Oct 2026 and still not delivered — 3 days late.');
+    expect(en.impactText(late, fmt.en)).toBe('120 units of SKU-01 from Acme are not in the warehouse when planned.');
+    expect(en.nextText(late)).toBe('Contact Acme for a confirmed delivery date and update the ETA.');
+    expect(en.impactText(low, fmt.en)).toBe('30 units short of safety stock, even after inbound due within 7 days.');
+    expect(ru.whyText(late, fmt.ru)).toContain('опоздание 3 дня');
+    expect(ru.nextText(low)).toBe('Закажите пополнение или переместите остаток с другого склада.');
+    for (const dict of [en, ru] as const) {
+      for (const r of [late, low]) {
+        const text = [dict.whyText(r, fmt.en), dict.impactText(r, fmt.en), dict.nextText(r)].join(' ');
+        expect(text).not.toMatch(/undefined|null|NaN/);
+      }
+    }
   });
 });

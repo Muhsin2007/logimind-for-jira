@@ -50,7 +50,7 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
   };
 
   return (
-    <Panel title={t.jiraIntegration}>
+    <Panel title={t.jiraIntegration} icon="link">
       {current.status === 'loading' && <Loading />}
       {current.status === 'error' && <ErrorState message={current.message} onRetry={current.reload} />}
       {current.status === 'ready' && (
@@ -65,19 +65,19 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
           )}
         </p>
       )}
-      <p className="muted small">{t.createdAsUser}</p>
+      <p className="footnote">{t.createdAsUser}</p>
 
       {canManage && (
-        <div className="row">
-          <label className="checkbox">
-            {t.project}
+        <div className="settings-form">
+          <label className="field">
+            <span className="field-label">{t.project}</span>
             <select className="input" value={projectKey} onChange={(e) => chooseProject(e.target.value)} disabled={projects.status !== 'ready'}>
               <option value="">{t.chooseProject}</option>
               {projects.status === 'ready' && projects.data.map((p) => <option key={p.key} value={p.key}>{p.name} ({p.key})</option>)}
             </select>
           </label>
-          <label className="checkbox">
-            {t.issueType}
+          <label className="field">
+            <span className="field-label">{t.issueType}</span>
             <select className="input" value={issueTypeId} onChange={(e) => setIssueTypeId(e.target.value)} disabled={!projectKey || issueTypes.status !== 'ready'}>
               {issueTypes.status === 'ready' && issueTypes.data.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -89,7 +89,7 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
       )}
       {projects.status === 'error' && <p role="alert" className="text-danger small">{projects.message}</p>}
       {issueTypes.status === 'error' && <p role="alert" className="text-danger small">{issueTypes.message}</p>}
-      {message && <p role={message.tone === 'error' ? 'alert' : 'status'} className={message.tone === 'error' ? 'text-danger small' : 'small'}>{message.text}</p>}
+      {message && <p role={message.tone === 'error' ? 'alert' : 'status'} className={`mt-3 small ${message.tone === 'error' ? 'text-danger' : 'text-success'}`}>{message.text}</p>}
     </Panel>
   );
 }

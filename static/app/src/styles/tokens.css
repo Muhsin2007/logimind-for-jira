@@ -1,0 +1,135 @@
+/*
+ * LogiMind design tokens. Atlassian tokens (--ds-*) come from view.theme.enable() and are used
+ * where Jira's own semantics matter (focus, links, blanket); the LogiMind palette sits on top:
+ * light by default, graphite when Jira runs in dark mode (html[data-color-mode='dark']).
+ */
+:root {
+  /* Surfaces: page < card < raised overlay. */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --surface-sunken: #f1f3f5;
+  --surface-overlay: #ffffff;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+  --hover: #f2f4f7;
+
+  /* Text */
+  --text: #161b26;
+  --text-subtle: #475467;
+  --text-subtlest: #667085;
+  --text-danger: #b42318;
+  --text-success: #067647;
+  --text-warning: #93370d;
+
+  /* Accent: electric blue. */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: #eff4ff;
+  --accent-text: #1d4ed8;
+  --on-accent: #ffffff;
+  --link: var(--ds-link, #1d4ed8);
+
+  /* Severity: muted, always paired with a glyph and a label. */
+  --sev-critical: #d92d20;
+  --sev-high: #e8590c;
+  --sev-medium: #d29400;
+  --sev-low: #8c95a3;
+  --sev-critical-bg: #fef3f2;
+  --sev-high-bg: #fff4ed;
+  --sev-medium-bg: #fffaeb;
+  --sev-low-bg: #f2f4f7;
+  --sev-critical-text: #b42318;
+  --sev-high-text: #b93815;
+  --sev-medium-text: #93370d;
+  --sev-low-text: #475467;
+
+  --success: #12b76a;
+  --success-bg: #ecfdf3;
+  --danger: #d92d20;
+  --danger-hover: #b42318;
+  --danger-bg: #fef3f2;
+  --warning-bg: #fffaeb;
+  --info-bg: #eff4ff;
+
+  --focus: var(--ds-border-focused, #2563eb);
+  --blanket: var(--ds-blanket, rgba(16, 24, 40, 0.45));
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 16px 40px -8px rgba(16, 24, 40, 0.22), 0 4px 8px -2px rgba(16, 24, 40, 0.06);
+
+  /* Scale */
+  --font: var(--ds-font-family-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Noto Sans', Ubuntu, sans-serif);
+  --mono: var(--ds-font-family-code, ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace);
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-base: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --content-max: 1320px;
+  color-scheme: light;
+}
+
+html[data-color-mode='dark'] {
+  --bg: #111317;
+  --surface: #181b20;
+  --surface-2: #1c2026;
+  --surface-sunken: #14161a;
+  --surface-overlay: #1c2026;
+  --border: #272c34;
+  --border-strong: #353b45;
+  --hover: #20252c;
+
+  --text: #e8eaed;
+  --text-subtle: #a8b0bc;
+  --text-subtlest: #858e9b;
+  --text-danger: #ff8a80;
+  --text-success: #5fd39a;
+  --text-warning: #f5c66b;
+
+  --accent: #3b82f6;
+  --accent-hover: #5b96f8;
+  --accent-subtle: rgba(59, 130, 246, 0.14);
+  --accent-text: #8ab4ff;
+  --on-accent: #ffffff;
+  --link: #8ab4ff;
+
+  --sev-critical: #e5534b;
+  --sev-high: #ec8a45;
+  --sev-medium: #d6a33a;
+  --sev-low: #7d8794;
+  --sev-critical-bg: rgba(229, 83, 75, 0.13);
+  --sev-high-bg: rgba(236, 138, 69, 0.13);
+  --sev-medium-bg: rgba(214, 163, 58, 0.13);
+  --sev-low-bg: rgba(125, 135, 148, 0.16);
+  --sev-critical-text: #ff9b94;
+  --sev-high-text: #f5ab73;
+  --sev-medium-text: #e9c26d;
+  --sev-low-text: #b4bcc7;
+
+  --success: #3fb97b;
+  --success-bg: rgba(63, 185, 123, 0.13);
+  --danger: #e5534b;
+  --danger-hover: #f06a62;
+  --danger-bg: rgba(229, 83, 75, 0.12);
+  --warning-bg: rgba(214, 163, 58, 0.12);
+  --info-bg: rgba(59, 130, 246, 0.12);
+
+  --blanket: rgba(0, 0, 0, 0.55);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 48px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  color-scheme: dark;
+}

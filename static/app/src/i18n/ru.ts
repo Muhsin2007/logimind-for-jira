@@ -1,5 +1,5 @@
 import type { RiskEvent } from '../../../../src/shared/api';
-import type { Messages } from './en';
+import { ev, num, str, type Messages } from './en';
 
 /** Russian plural form: 1 день, 2 дня, 5 дней (11–14 always take the "many" form). */
 export function plural(n: number, one: string, few: string, many: string): string {
@@ -399,4 +399,136 @@ export const ru: Messages = {
   save: 'Сохранить',
   saving: 'Сохраняем…',
   savedConfig: (project, type) => `Сохранено: новые задачи будут создаваться в ${project} с типом «${type}».`,
+  pageDesc: {
+    dashboard: 'Что требует внимания в поставках и остатках — по последней проверке правил.',
+    shipments: 'Все импортированные поставки: статус, даты прибытия и открытые риски.',
+    inventory: 'Остатки по артикулам и складам: доступно, поступления, страховой запас и дни покрытия.',
+    whatIf: 'Смоделируйте задержку поставки или поставщика и посмотрите, какие позиции ухудшатся.',
+    risks: 'Открытые риски по детерминированным правилам: почему это важно и что делать дальше.',
+    copilot: 'Спрашивайте о поставках, остатках и рисках обычным языком; каждый ответ ссылается на ваши записи.',
+    import: 'Загрузка CSV, управление данными и выбор проекта Jira для новых задач.',
+  },
+  moreInfo: 'Что означает этот показатель',
+
+  attentionTitle: (n) => `${n} ${plural(n, 'критический или высокий риск требует', 'критических или высоких риска требуют', 'критических или высоких рисков требуют')} внимания`,
+  attentionText: (critical, high) => `Критических: ${critical} · высоких: ${high}. Начните с главных рисков ниже.`,
+  allClearTitle: 'Критических и высоких рисков нет',
+  allClearText: 'Поставки и остатки проходят правила на критическом и высоком уровнях.',
+  reviewRisks: 'К рискам',
+  kpiInfoOpen: 'Поставки, которые не доставлены и не отменены и не имеют фактической даты прибытия.',
+  kpiInfoLate: 'Открытые поставки, плановая дата прибытия которых уже прошла. Более поздний ETA этого не меняет.',
+  kpiInfoOnTime: 'Доля доставленных поставок, прибывших в плановую дату или раньше.',
+  kpiInfoBelowSafety: 'Складские позиции (артикул на складе), у которых прогноз — доступный остаток плюс поступления в ближайшие 7 дней — ниже страхового запаса.',
+  kpiInfoValue: 'Цена за единицу × недостающее до страхового запаса количество, по позициям с ценой в файле. Валюта — та, что в файле.',
+  noDeliveriesYet: 'доставленных поставок пока нет',
+  riskDistribution: 'Распределение рисков',
+  viewAll: 'Все',
+  viewShipmentsLink: 'Поставки',
+  viewStockLink: 'Остатки',
+
+  filterRisk: 'Фильтр по риску',
+  riskFilterAll: 'Все',
+  riskFilterAt: 'С риском',
+  riskFilterNone: 'Без риска',
+  etaSlip: (n) => `+${n} дн.`,
+  etaSlipTitle: (n) => `ETA на ${days(n)} позже плановой даты`,
+  clearFilters: 'Сбросить фильтры',
+
+  secOverview: 'Общие сведения',
+  secSupplier: 'Поставщик и перевозчик',
+  secTimeline: 'Сроки доставки',
+  secImpact: 'Склад и влияние на остатки',
+  secRisks: 'Связанные риски и задачи Jira',
+  timelinePlanned: 'Плановое прибытие',
+  timelineEta: 'Последний ETA',
+  timelineActual: 'Получено',
+  timelineNoEta: 'ETA в данных нет',
+  timelineNotYet: 'Ещё не получено',
+  vsPlan: (n) => (n === 0 ? 'в плановую дату' : n > 0 ? `на ${days(n)} позже плана` : `на ${days(-n)} раньше плана`),
+
+  sumPositions: 'Складские позиции',
+  sumCritical: 'Нет доступного остатка',
+  sumBelow: 'Ниже страхового запаса',
+  sumNoUsage: 'Без расхода в день',
+  stockFilter: 'Фильтр складских позиций',
+  stockFilterAll: 'Все',
+  onHandReserved: (onHand, reserved) => `на складе ${onHand} · в резерве ${reserved}`,
+  inboundVia: (ids) => `поставки ${ids}`,
+  colProjectedVsSafety: 'Прогноз / страховой',
+
+  riskWhy: 'Почему это важно',
+  riskImpact: 'Влияние на бизнес',
+  riskNextStep: 'Что сделать',
+  riskEvidence: 'Данные правила',
+  whyText: (r, fmt) => {
+    const n = num(r, r.type === 'LATE_SHIPMENT' ? 'Days late' : r.type === 'ETA_SLIP' ? 'Slip (days)' : 'Days to planned arrival');
+    switch (r.type) {
+      case 'LATE_SHIPMENT':
+        return `Плановая дата прибытия — ${fmt.date(str(r, 'Planned arrival'))}, груз всё ещё не доставлен${n === null ? '' : ` (опоздание ${days(n)})`}.`;
+      case 'ETA_SLIP':
+        return `Последний ETA (${fmt.date(str(r, 'ETA'))}) ${n === null ? 'позже' : `на ${days(n)} позже`} плановой даты (${fmt.date(str(r, 'Planned arrival'))}).`;
+      case 'MISSING_ETA': {
+        const where = ev(r, 'Status') === 'customs' ? 'Груз на таможне' : 'Груз в пути';
+        const when = n === null ? '' : n >= 0 ? `; до планового прибытия ${days(n)}` : `; плановая дата прошла ${days(-n)} назад`;
+        return `${where}, а ETA в данных нет${when}.`;
+      }
+      default: {
+        const available = num(r, 'Available');
+        return available !== null && available <= 0
+          ? `Доступного остатка нет: на складе ${fmt.number(num(r, 'On hand') ?? 0)}, в резерве ${fmt.number(num(r, 'Reserved') ?? 0)}.`
+          : `Прогноз остатка (${fmt.number(num(r, 'Projected') ?? 0)}) ниже страхового запаса ${fmt.number(num(r, 'Safety stock') ?? 0)}.`;
+      }
+    }
+  },
+  impactText: (r, fmt) => {
+    const qty = num(r, 'Qty');
+    const units = `${str(r, 'SKU')}${qty === null ? '' : ` (${fmt.number(qty)} шт.)`}`;
+    switch (r.type) {
+      case 'LATE_SHIPMENT':
+        return `${units} от ${str(r, 'Supplier')} нет на складе к плановой дате.`;
+      case 'ETA_SLIP':
+        return `${units} прибудет позже плана; остаток, рассчитанный на эту поставку, до тех пор будет меньше.`;
+      case 'MISSING_ETA':
+        return `Для ${units} нет ожидаемой даты, поэтому поставку нельзя учесть в планировании остатков.`;
+      default: {
+        const available = num(r, 'Available');
+        const gap = (num(r, 'Safety stock') ?? 0) - (num(r, 'Projected') ?? 0);
+        if (available !== null && available <= 0) return 'Спрос на этом складе нельзя обслужить из остатка, пока не придут поставки.';
+        return gap > 0 ? `Не хватает ${fmt.number(gap)} шт. до страхового запаса даже с поставками на ближайшие 7 дней.` : 'Остаток ниже страхового уровня.';
+      }
+    }
+  },
+  nextText: (r) => {
+    switch (r.type) {
+      case 'LATE_SHIPMENT':
+        return `Свяжитесь с ${str(r, 'Supplier')}, получите подтверждённую дату доставки и обновите ETA.`;
+      case 'ETA_SLIP':
+        return `Проверьте, какие заказы зависят от ${str(r, 'SKU')} и не задержит ли их новый ETA.`;
+      case 'MISSING_ETA':
+        return `Запросите ETA у ${str(r, 'Supplier')} или у перевозчика.`;
+      default: {
+        const inbound = ev(r, 'Inbound shipments');
+        return inbound
+          ? `Ускорьте приёмку ${inbound}; если этого мало — переместите остаток с другого склада или закажите пополнение.`
+          : 'Закажите пополнение или переместите остаток с другого склада.';
+      }
+    }
+  },
+
+  stepsLabel: 'Шаги импорта',
+  steps: { upload: 'Загрузка', validate: 'Проверка', map: 'Сопоставление', results: 'Результат' },
+  dropTitle: 'Перетащите CSV-файлы сюда',
+  dropOr: 'или',
+  browseFiles: 'выберите файлы',
+  dropHint: 'Поставки или остатки · CSV в UTF-8 · до 1 МБ и 2 000 строк в файле',
+  howToFix: 'Как исправить: поправьте эти строки в файле (строка 1 — заголовок) и импортируйте его снова. Импорт заменяет все данные этого типа, поэтому исправленный файл будет использован целиком.',
+  resultOk: 'Импортировано',
+  resultPartial: 'Импортировано, часть строк отклонена',
+  resultFailed: 'Не импортировано',
+  dangerZone: 'Опасная зона',
+  deleteTitle: 'Удалить все данные LogiMind?',
+
+  yourQuestion: 'Вопрос',
+  scenario: 'Сценарий',
+  sidebarRisk: 'Риск LogiMind',
 };

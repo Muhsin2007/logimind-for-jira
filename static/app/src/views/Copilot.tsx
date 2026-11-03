@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { call, errorMessage, type CitedStatement, type CopilotAnswer } from '../api';
-import { Panel } from '../components';
+import { Callout, Loading, Panel } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
+import { Icon } from '../icons';
 
 const MAX_QUESTION = 500;
 
@@ -36,37 +37,39 @@ export function Copilot(_props: NavProps) {
 
   return (
     <div className="stack">
-      <p className="notice ai-notice" role="note">
-        <span className="check" aria-hidden="true">✓</span>{' '}
-        <strong>{t.aiNotice}</strong> {t.aiNoticeDetail}
+      <p className="ai-notice" role="note">
+        <Icon name="checkCircle" className="check" />
+        <span><strong>{t.aiNotice}</strong> {t.aiNoticeDetail}</span>
       </p>
 
-      <form className="copilot-form" onSubmit={submit}>
-        <label htmlFor="copilot-q" className="h4">{t.askLabel}</label>
-        <div className="row">
+      <form className="panel ask-form" onSubmit={submit}>
+        <label htmlFor="copilot-q" className="field-label">{t.askLabel}</label>
+        <div className="ask-box">
+          <Icon name="sparkles" />
           <input
             id="copilot-q"
-            className="input copilot-input"
+            className="ask-input"
             value={question}
             maxLength={MAX_QUESTION}
             placeholder={t.askPlaceholder}
             onChange={(e) => setQuestion(e.target.value)}
           />
           <button type="submit" className="btn btn-primary" disabled={busy || !question.trim()}>
-            {busy ? t.answering : t.ask}
+            <Icon name="send" size={14} /> {busy ? t.answering : t.ask}
           </button>
         </div>
-        <div className="row" aria-label={t.examplesLabel}>
+        <div className="examples" role="group" aria-label={t.examplesLabel}>
           {t.examples.map((q) => (
-            <button key={q} type="button" className="btn btn-subtle chip" onClick={() => void ask(q)} disabled={busy}>
+            <button key={q} type="button" className="chip" onClick={() => void ask(q)} disabled={busy}>
               {q}
             </button>
           ))}
         </div>
       </form>
 
-      {error && <p role="alert" className="text-danger">{error}</p>}
-      {answer && <AnswerView answer={answer} />}
+      {busy && <Loading label={t.answering} variant="inline" />}
+      {error && <Callout tone="danger" role="alert">{error}</Callout>}
+      {answer && !busy && <AnswerView answer={answer} />}
     </div>
   );
 }
@@ -80,36 +83,43 @@ function AnswerView({ answer }: { answer: CopilotAnswer }) {
 
   return (
     <div className="stack" aria-live="polite">
+      <div className="answer-question">
+        <span className="badge badge-accent">{t.yourQuestion}</span>
+        <span>{answer.question}</span>
+      </div>
       {answer.fallbackReason && (
-        <p className="notice" role="note"><strong>{t.ruleBasedAnswer}</strong> {t.fallbackText(answer.fallbackReason)}</p>
+        <Callout tone="warning" role="note" title={t.ruleBasedAnswer}>{t.fallbackText(answer.fallbackReason)}</Callout>
       )}
-      <Panel title={t.verifiedFacts}>
-        {answer.facts.length === 0 ? <p className="muted">{t.noMatchingRecords}</p> : <Statements items={answer.facts} />}
-      </Panel>
-      <Panel title={t.nextSteps}>
-        {answer.recommendations.length === 0 ? (
-          <p className="muted">{t.noActionSuggested}</p>
-        ) : (
-          <ol className="answer-list">
-            {answer.recommendations.map((r, i) => (
-              <li key={i}>
-                <span className={`badge prio-${r.priority}`}>{t.priority[r.priority]}</span> {r.text}
-                <div className="muted small">{t.basedOn(r.evidence, t.confidence[r.confidence])}</div>
-                <Ids ids={r.ids} />
-              </li>
-            ))}
-          </ol>
-        )}
-      </Panel>
+      <div className="grid-2">
+        <Panel title={t.verifiedFacts} icon="checkCircle">
+          {answer.facts.length === 0 ? <p className="muted">{t.noMatchingRecords}</p> : <Statements items={answer.facts} />}
+        </Panel>
+        <Panel title={t.nextSteps} icon="arrowRight">
+          {answer.recommendations.length === 0 ? (
+            <p className="muted">{t.noActionSuggested}</p>
+          ) : (
+            <ol className="answer-list">
+              {answer.recommendations.map((r, i) => (
+                <li key={i}>
+                  <span className={`badge prio-${r.priority}`}>{t.priority[r.priority]}</span> {r.text}
+                  <div className="rec-meta">{t.basedOn(r.evidence, t.confidence[r.confidence])}</div>
+                  <Ids ids={r.ids} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </Panel>
+      </div>
       {answer.unknowns.length > 0 && (
-        <Panel title={t.unknownData}>
+        <Panel title={t.unknownData} icon="alertCircle">
           <ul className="answer-list">
             {answer.unknowns.map((u) => <li key={u}>{u}</li>)}
           </ul>
         </Panel>
       )}
-      <p className="muted small">
-        {t.evaluated(fmt.date(answer.dataAsOf.today))}{freshness.length > 0 ? ` · ${freshness.join(' · ')}` : ''} · {answer.mode === 'rules' ? t.modeRules : t.modeLlm}
+      <p className="mode-line">
+        <span className={`badge ${answer.mode === 'llm' ? 'badge-accent' : 'badge-neutral'}`}>{answer.mode === 'rules' ? t.modeRules : t.modeLlm}</span>
+        <span>{t.evaluated(fmt.date(answer.dataAsOf.today))}{freshness.length > 0 ? ` · ${freshness.join(' · ')}` : ''}</span>
       </p>
     </div>
   );

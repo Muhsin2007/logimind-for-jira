@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type ImportKind, type MappingProposal } from '../api';
 import { useI18n } from '../i18n';
+import { Icon } from '../icons';
 import type { Messages } from '../i18n/en';
 
 type Proposal = Extract<MappingProposal, { ok: true }>;
@@ -60,16 +61,16 @@ export function ColumnMapping({ filename, proposal, busy, onConfirm, onCancel }:
     setMapping((m) => m.map((f, i) => (i === index ? field : field !== null && f === field ? null : f)));
 
   return (
-    <div className="result result-warn" role="group" aria-label={t.mappingFor(filename)}>
+    <div className="mapping" role="group" aria-label={t.mappingFor(filename)}>
       <p>
         <strong>{filename}: </strong>
         {t.columnsNotRecognised}{' '}
-        {proposal.source === 'ai' ? <>{t.aiProposed} <strong>{t.checkBeforeImport}</strong></> : <>{t.matchedByName}</>}{' '}
+        {proposal.source === 'ai' ? <><span className="inline-icon"><Icon name="sparkles" size={14} /></span> {t.aiProposed} <strong>{t.checkBeforeImport}</strong></> : <>{t.matchedByName}</>}{' '}
         {t.onlyNamesMapped}
       </p>
-      {proposal.notice && <p className="notice" role="note">{proposal.notice}</p>}
+      {proposal.notice && <p className="callout callout-info" role="note">{proposal.notice}</p>}
       <div className="row">
-        <label htmlFor={`kind-${filename}`} className="h4">{t.fileType}</label>
+        <label htmlFor={`kind-${filename}`} className="field-label">{t.fileType}</label>
         <select id={`kind-${filename}`} className="input" value={kind} onChange={(e) => chooseKind(e.target.value as ImportKind)} disabled={busy}>
           <option value="shipments">{t.fileKind.shipments}</option>
           <option value="inventory">{t.fileKind.inventory}</option>
@@ -87,7 +88,7 @@ export function ColumnMapping({ filename, proposal, busy, onConfirm, onCancel }:
               return (
                 <tr key={c.index}>
                   <td>{c.header || <span className="muted">{t.noName}</span>}</td>
-                  <td className="muted small">{c.samples.join(' · ') || '—'}</td>
+                  <td className="muted small mono">{c.samples.join(' · ') || '—'}</td>
                   <td>
                     <select
                       className="input"
