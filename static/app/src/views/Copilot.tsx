@@ -4,7 +4,7 @@ import { Panel } from '../components';
 import { fmtDateTime } from '../format';
 import type { NavProps } from '../App';
 
-const EXAMPLES = ["Today's risk summary", 'Status of SHP-1004', 'Stock of SKU-10', 'Сводка рисков на сегодня', 'Where is SHP-9999?'];
+const EXAMPLES = ["Today's risk summary", 'Status of SHP-1004', 'Status of SHP-1002', 'Stock of SKU-10', 'Where is SHP-9999?'];
 const MAX_QUESTION = 500;
 
 export function Copilot(_props: NavProps) {

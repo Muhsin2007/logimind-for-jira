@@ -47,7 +47,7 @@ Last updated: 2026-11-02
 
 **Verified**
 - `npx vitest run`: **71 passed** (+ copilot 8, run against the real demo dataset).
-- In Jira: "Status of SHP-1004" (facts, SCRUM-5 link + status, destination stock-out, recommendations), "Where is SHP-9999?" (nothing invented, reported as unknown), "Сводка рисков на сегодня" (summary + top risks).
+- In Jira: "Status of SHP-1004" (facts, SCRUM-5 link + status, destination stock-out, recommendations), "Where is SHP-9999?" (nothing invented, reported as unknown), a Russian-language summary request (summary + top risks; Russian keywords are still accepted as input, the UI is English-only).
 
 **ecc review** (`ecc:code-reviewer`) — fixed: ~10 storage snapshots and one Jira call per risk per question (now one snapshot + one link lookup via a request-scoped toolbox), transfer suggestions over-promising across donors and hiding the remaining gap, substring ID matches (`SKU-1` in `SKU-1-BLUE`), shipment questions ignoring SKUs, silent truncation to 3 records / top 5 risks, pruned import history reported as "no data", dropped Jira status errors, unclamped `limit`, case-sensitive IDs. Re-verified in Jira on v5.6.0 ("Stock of SKU-10" → transfer exactly 100 units). Tests: **74 passed**.
 - Deferred to Phase 5 (Rovo): tools return free-text CSV fields verbatim; Rovo actions must return trimmed DTOs and mark free text as untrusted data.
