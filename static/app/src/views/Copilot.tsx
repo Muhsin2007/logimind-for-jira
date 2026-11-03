@@ -4,7 +4,7 @@ import { Panel } from '../components';
 import { fmtDateTime } from '../format';
 import type { NavProps } from '../App';
 
-const EXAMPLES = ["Today's risk summary", 'Status of SHP-1004', 'Status of SHP-1002', 'Stock of SKU-10', 'Where is SHP-9999?'];
+const EXAMPLES = ["Today's risk summary", 'Which delays hurt stock the most?', 'Why is SHP-1004 a problem and what should I do?', 'Stock of SKU-10', 'Where is SHP-9999?'];
 const MAX_QUESTION = 500;
 
 export function Copilot(_props: NavProps) {
@@ -36,8 +36,9 @@ export function Copilot(_props: NavProps) {
   return (
     <div className="stack">
       <p className="notice" role="note">
-        <strong>Rule-based mode.</strong> No AI model is connected yet. Answers are assembled only from your imported data by the
-        same read-only tools the Rovo agent will use; nothing is predicted or invented.
+        <strong>AI mode.</strong> Answers are written by Claude (Atlassian-hosted Forge LLM, no external provider), which can only call
+        LogiMind's read-only tools. Every ID, number and date in an answer is checked against your data; if the AI is unavailable or an
+        answer cannot be verified, the rule-based answer is shown instead.
       </p>
 
       <form className="copilot-form" onSubmit={submit}>
@@ -78,6 +79,9 @@ function AnswerView({ answer }: { answer: CopilotAnswer }) {
 
   return (
     <div className="stack" aria-live="polite">
+      {answer.fallbackReason && (
+        <p className="notice" role="note"><strong>Rule-based answer.</strong> {answer.fallbackReason}</p>
+      )}
       <Panel title="Verified facts">
         {answer.facts.length === 0 ? <p className="muted">No matching records in the current data.</p> : <Statements items={answer.facts} />}
       </Panel>
@@ -104,7 +108,7 @@ function AnswerView({ answer }: { answer: CopilotAnswer }) {
         </Panel>
       )}
       <p className="muted small">
-        Evaluated {answer.dataAsOf.today}{freshness.length > 0 ? ` · ${freshness.join(' · ')}` : ''} · mode: {answer.mode === 'rules' ? 'rules, no AI' : 'AI'}
+        Evaluated {answer.dataAsOf.today}{freshness.length > 0 ? ` · ${freshness.join(' · ')}` : ''} · mode: {answer.mode === 'rules' ? 'rules, no AI' : 'AI (Forge LLM), IDs and numbers verified'}
       </p>
     </div>
   );
