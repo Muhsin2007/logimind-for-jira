@@ -24,8 +24,10 @@ export interface LlmTool {
 export type LlmToolChoice = 'auto' | 'required' | { type: 'function'; function: { name: string } };
 
 export interface LlmRequest {
-  /** Short label for usage logs, e.g. "copilot" or "column-mapping". */
-  purpose: string;
+  /** Which feature calls; also selects the usage limits that apply. */
+  purpose: 'copilot' | 'column-mapping';
+  /** The asking user, for per-user limits (copilot). */
+  accountId?: string | null;
   messages: LlmMessage[];
   tools?: LlmTool[];
   toolChoice?: LlmToolChoice;
