@@ -87,6 +87,11 @@ modules:
           type: string
           required: true
           description: A risk ID exactly as returned by another LogiMind action, e.g. LATE_SHIPMENT:SHP-1004.
+  # Atlassian-hosted Claude (Forge LLMs): AI column mapping and the AI Copilot. No external provider.
+  llm:
+    - key: logimind-llm
+      model:
+        - claude
   function:
     - key: resolver
       handler: index.handler
