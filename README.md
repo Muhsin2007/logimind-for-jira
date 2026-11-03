@@ -83,6 +83,12 @@ No external egress, no AI provider.
 
 [Project plan](docs/PROJECT_PLAN.md) · [Implementation status](docs/IMPLEMENTATION_STATUS.md) · [Test report](docs/TEST_REPORT.md) · [Security review](docs/SECURITY_REVIEW.md) · [Devpost checklist](docs/DEVPOST_CHECKLIST.md)
 
+## Privacy, terms and support
+
+- Privacy policy: [PRIVACY.md](PRIVACY.md)
+- Terms: provided under the [MIT License](LICENSE), "as is", without warranty.
+- Support: [GitHub issues](https://github.com/Muhsin2007/logimind-for-jira/issues)
+
 ## License
 
 [MIT](LICENSE)
