@@ -86,6 +86,32 @@ export interface IssueContextData {
   shipment: ShipmentDetail | null;
 }
 
+/** A statement in a copilot answer, with the record IDs that support it. */
+export interface CitedStatement {
+  text: string;
+  ids: string[];
+}
+
+export interface CopilotRecommendation extends CitedStatement {
+  priority: 'high' | 'medium' | 'low';
+  /** Which data the recommendation is derived from. */
+  evidence: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export type CopilotIntent = 'risk_summary' | 'shipment' | 'inventory' | 'help';
+
+export interface CopilotAnswer {
+  /** 'rules' = deterministic answers from the data; no AI model was involved. */
+  mode: 'rules' | 'llm';
+  intent: CopilotIntent;
+  question: string;
+  facts: CitedStatement[];
+  recommendations: CopilotRecommendation[];
+  unknowns: string[];
+  dataAsOf: { today: IsoDate; shipmentsImportedAt: string | null; inventoryImportedAt: string | null };
+}
+
 export interface ResolverApi {
   getHealth: { payload: void; result: { status: 'ok'; timestamp: string } };
   getAccess: { payload: void; result: { canManageData: boolean } };
@@ -104,4 +130,5 @@ export interface ResolverApi {
   listJiraIssueTypes: { payload: { projectKey: string }; result: { id: string; name: string }[] };
   saveJiraConfig: { payload: { projectKey: string; issueTypeId: string }; result: JiraConfig };
   getIssueContext: { payload: void; result: IssueContextData };
+  askCopilot: { payload: { question: string }; result: CopilotAnswer };
 }

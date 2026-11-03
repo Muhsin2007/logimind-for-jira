@@ -59,6 +59,14 @@ p { margin: 4px 0 8px; }
 .status-cat-new { background: var(--neutral); }
 .status-cat-indeterminate { background: var(--ds-background-information, #e9f2ff); }
 .status-cat-done { background: var(--success-subtle); }
+.copilot-input { flex: 1; min-width: 240px; }
+.chip { font-size: 12px; padding: 2px 8px; border: 1px solid var(--border); }
+.answer-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.ids { display: inline-flex; gap: 4px; flex-wrap: wrap; margin-left: 6px; }
+.id-chip { background: var(--neutral); border-radius: 3px; padding: 0 4px; color: var(--text-subtle); }
+.prio-high { background: var(--sev-high-subtle); box-shadow: inset 3px 0 0 var(--sev-high); }
+.prio-medium { background: var(--sev-medium-subtle); box-shadow: inset 3px 0 0 var(--sev-medium); }
+.prio-low { background: var(--sev-low-subtle); box-shadow: inset 3px 0 0 var(--sev-low); }
 .notice { background: var(--ds-background-information, #e9f2ff); padding: 8px 12px; border-radius: var(--radius); }
 .link { border: 0; background: none; padding: 0; color: var(--ds-link, #0c66e4); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .small { font-size: 12px; }

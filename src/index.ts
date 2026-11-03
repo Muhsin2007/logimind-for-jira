@@ -1,5 +1,7 @@
 import Resolver from '@forge/resolver';
 import { canManageData, requireDataManager } from './auth/access';
+import { MAX_QUESTION, RuleBasedCopilot } from './copilot/rule-based-copilot';
+import { ServiceToolbox } from './copilot/tools';
 import { ForgeJiraGateway } from './jira/forge-jira-gateway';
 import { IssueService, ISSUE_ID } from './services/issue-service';
 import { LogisticsService } from './services/logistics-service';
@@ -8,6 +10,8 @@ import { KvsLogisticsRepository } from './storage/kvs-repository';
 
 const logistics = new LogisticsService(new KvsLogisticsRepository());
 const issues = new IssueService(logistics, new KvsIssueLinkRepository(), new ForgeJiraGateway());
+// No AI provider is enabled yet (paid Forge LLMs not approved), so the copilot answers from rules.
+const copilot = new RuleBasedCopilot(new ServiceToolbox(logistics, issues));
 const resolver = new Resolver();
 
 function requireString(payload: unknown, field: string, maxLength: number): string {
@@ -30,6 +34,7 @@ resolver.define('listInventory', () => logistics.listInventory());
 resolver.define('listRisks', () => logistics.listRisks());
 resolver.define('listImports', () => logistics.listImports());
 resolver.define('listIssueLinks', () => issues.listLinks());
+resolver.define('askCopilot', ({ payload }) => copilot.ask(requireString(payload, 'question', MAX_QUESTION)));
 
 // Issue creation runs as the user, so Jira's own project permissions decide who may create.
 resolver.define('createIssueForRisk', ({ payload, context }) =>

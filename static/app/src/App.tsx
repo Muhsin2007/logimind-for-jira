@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Copilot } from './views/Copilot';
 import { Dashboard } from './views/Dashboard';
 import { ImportSettings } from './views/ImportSettings';
 import { Inventory } from './views/Inventory';
@@ -6,7 +7,7 @@ import { RiskCenter } from './views/RiskCenter';
 import { ShipmentDrawer } from './views/ShipmentDrawer';
 import { Shipments } from './views/Shipments';
 
-export type Tab = 'dashboard' | 'shipments' | 'inventory' | 'risks' | 'import';
+export type Tab = 'dashboard' | 'shipments' | 'inventory' | 'risks' | 'copilot' | 'import';
 
 export interface NavProps {
   /** Increments after any data change so views refetch. */
@@ -21,6 +22,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'shipments', label: 'Shipments' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'risks', label: 'Risk Center' },
+  { id: 'copilot', label: 'Copilot' },
   { id: 'import', label: 'Import & Settings' },
 ];
 
@@ -29,6 +31,7 @@ const VIEWS: Record<Tab, (props: NavProps) => JSX.Element> = {
   shipments: Shipments,
   inventory: Inventory,
   risks: RiskCenter,
+  copilot: Copilot,
   import: ImportSettings,
 };
 
