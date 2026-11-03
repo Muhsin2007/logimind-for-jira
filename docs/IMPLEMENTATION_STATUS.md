@@ -36,7 +36,7 @@ Last updated: 2026-11-03
 - File-picker upload of the messy CSV was not driven in the browser (cross-origin Forge iframe; native file dialog); the same server path was verified through the paste box and by tests.
 - Verification checks values, not reasoning: an AI recommendation once concluded "projected 140 will be below safety stock 50" from correct numbers. The UI says so; consider a deterministic check of comparisons later.
 - Usage counters are best effort (no atomic increment in KVS): parallel calls can overshoot a cap by a few.
-- Production still runs v2.1.0 without AI; deploying needs the author's approval (major version upgrade for installed sites).
+- Production deployed as **v3.0.0** (commit `5f086ea`, author-approved 2026-11-03; major version for the `llm` module, Runs on Atlassian eligible). It has no installations yet, so the AI features were verified on the development install only; judges get v3.0.0 through the install link.
 
 ## Phase 5 — Rovo agent
 
