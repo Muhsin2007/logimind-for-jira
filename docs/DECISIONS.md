@@ -13,5 +13,6 @@
 | D9 | 2026-11-03 | No AI provider (user declined paid Forge LLMs); Copilot runs in rule-based mode, clearly labelled | Forge LLMs are billed to the developer with no free quota |
 | D10 | 2026-11-03 | Rovo agent with read-only `GET` actions over the same toolbox; CSV text isolated as untrusted | Bonus eligibility with minimal risk; prompt-injection defence |
 | D11 | 2026-11-03 | Live Rovo verification deferred; QA continued | Rovo/Agent Studio not provisioned on the Free-plan developer site; enabling a paid trial is the user's decision |
+| D14 | 2026-11-03 | Adopt `docs/ROADMAP.md`: real AI via Forge LLMs (budget ≈ $10, Haiku), days of cover + what-if, closed-loop Jira automation, MCP as fallback bonus, design polish | Aim for a top-3 finish; supersedes D9 (no AI) once the LLM provider ships |
 | D13 | 2026-11-03 | Keep the author's e-mail in commit history when publishing | Author's choice after the pre-publication scan flagged it |
 | D12 | 2026-11-03 | MIT license | Codegeist asks for an open-source license; MIT is the simplest permissive choice (author may change it) |

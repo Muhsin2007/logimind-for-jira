@@ -1,0 +1,29 @@
+# Roadmap to the Codegeist 2026 deadline (2026-12-22 12:00 PT)
+
+Agreed with the author on 2026-11-03. Goal: a top-3 finish in *Apps for Specialized Industries* plus one bonus prize.
+
+## Why these changes
+Judging criteria are equally weighted: Technological implementation, Design, Potential impact, Innovation, Presentation. Current gaps: no real AI, and the app *shows* risks but does not *act* on them. A submission can win at most one grand prize and one bonus.
+
+## Decisions (author-approved)
+- **Real AI via Forge LLMs** (`@forge/llm`, Claude Haiku 4.5 by default). Budget: up to about **$10** for the whole hackathon (about $0.005 per call). Adding the `llm` module is a major version upgrade. The rule-based copilot stays as the fallback whenever the LLM is unavailable or fails.
+- **AI safety:** the LLM may only call the existing read-only tools. Every ID or number cited in an answer is validated against the data before display; invalid answers fall back to rules. CSV text stays untrusted.
+- **Bonus:** keep the Rovo agent. If Rovo is still unavailable on the site, target **Best app with Atlassian MCP** (`rovo:mcp` exposing the same read-only tools) — verify first whether it works without Rovo.
+
+## Plan
+| Week | Work |
+|---|---|
+| 1 | Forge LLM: **AI column mapping for any supplier CSV/Excel** (AI proposes the mapping, the user confirms, the existing validator runs) and an **AI Copilot with tool calling** with cited-ID validation and rule-based fallback |
+| 2 | **Days of cover + projected stock-out date** (optional `daily_usage` column, deterministic) and a **what-if delay simulator** (slider, live re-evaluation) |
+| 3 | **Closed loop in Jira:** scheduled daily check (`scheduledTrigger`), optional auto-create issues for new critical risks (admin setting), comment "resolved in data" when a risk disappears, daily briefing; AI-drafted supplier follow-up message (copy only, never sent) |
+| 4 | Bonus: live Rovo test if Rovo gets enabled, else `rovo:mcp` |
+| 5 | Design: inbound timeline, stock chart per SKU, first-run onboarding |
+| 6 | Full QA + ecc reviews, production deploy (author approval) |
+| 7 | Video around three "wow" moments (messy CSV mapped by AI → what-if slider → Jira issue created automatically), Devpost texts, buffer |
+
+## Presentation story
+Persona: a purchasing lead at an auto-parts importer in Tashkent who spends an hour every morning in spreadsheets. Show before/after with concrete numbers from the demo data.
+
+## Working rules
+- Small commits, tests first for domain logic, ecc reviewers after each feature, docs updated per feature.
+- Ask the author before: production deploys, any spend beyond the LLM budget, publishing anything new.
