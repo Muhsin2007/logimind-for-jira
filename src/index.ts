@@ -10,8 +10,6 @@ import { KvsLogisticsRepository } from './storage/kvs-repository';
 
 const logistics = new LogisticsService(new KvsLogisticsRepository());
 const issues = new IssueService(logistics, new KvsIssueLinkRepository(), new ForgeJiraGateway());
-// No AI provider is enabled yet (paid Forge LLMs not approved), so the copilot answers from rules.
-const copilot = new RuleBasedCopilot(new ServiceToolbox(logistics, issues));
 const resolver = new Resolver();
 
 function requireString(payload: unknown, field: string, maxLength: number): string {
@@ -34,7 +32,11 @@ resolver.define('listInventory', () => logistics.listInventory());
 resolver.define('listRisks', () => logistics.listRisks());
 resolver.define('listImports', () => logistics.listImports());
 resolver.define('listIssueLinks', () => issues.listLinks());
-resolver.define('askCopilot', ({ payload }) => copilot.ask(requireString(payload, 'question', MAX_QUESTION)));
+// No AI provider is enabled yet (paid Forge LLMs not approved), so the copilot answers from rules.
+// A fresh toolbox per request reads the data once and answers every tool call from that view.
+resolver.define('askCopilot', ({ payload }) =>
+  new RuleBasedCopilot(new ServiceToolbox(logistics, issues)).ask(requireString(payload, 'question', MAX_QUESTION)),
+);
 
 // Issue creation runs as the user, so Jira's own project permissions decide who may create.
 resolver.define('createIssueForRisk', ({ payload, context }) =>

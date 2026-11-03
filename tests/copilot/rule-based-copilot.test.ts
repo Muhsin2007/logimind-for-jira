@@ -86,7 +86,7 @@ describe('RuleBasedCopilot', () => {
     for (const q of ['Сводка рисков на сегодня', "today's risk summary"]) {
       const a = await ctx.copilot.ask(q);
       expect(a.intent).toBe('risk_summary');
-      expect(a.facts[0].text).toMatch(/^21 open risks on 2026-11-02: 2 critical, 4 high, 13 medium, 2 low\.$/);
+      expect(a.facts[0].text).toMatch(/^21 open risks on 2026-11-02: 2 critical, 4 high, 13 medium, 2 low\./);
       expect(a.recommendations.length).toBeGreaterThan(0);
       for (const id of citedIds(a)) expect(id).toMatch(/^(LATE_SHIPMENT|ETA_SLIP|MISSING_ETA|LOW_STOCK):|^SHP-\d{4}$|^SKU-\d{2}@|^SCRUM-\d+$/);
     }
@@ -102,9 +102,37 @@ describe('RuleBasedCopilot', () => {
     const old: ImportBatch = { id: 'x', kind: 'inventory', filename: 'i.csv', importedAt: '2026-10-01T00:00:00Z', importedBy: null, rowsTotal: 1, rowsValid: 1, rowsRejected: 0, errors: [] };
     const a = await demoCopilot({ imports: [old] }).copilot.ask('risks today');
     expect(a.unknowns).toEqual([
-      'No shipment import is recorded, so shipment data may be missing.',
+      'The shipment import time is no longer in the import history, so its freshness is unknown.',
       'Inventory data was last imported 2026-10-01 and may be stale.',
     ]);
+  });
+
+  it('splits a transfer across donors without over-promising and replenishes the rest', async () => {
+    const item = (warehouse: string, onHand: number, safetyStock: number): InventoryItem => ({
+      sku: 'SKU-X', productName: null, warehouse, onHand, reserved: 0, inboundQty: 0, safetyStock, unitCost: null, updatedAt: TODAY,
+    });
+    const { copilot } = demoCopilot({ shipments: [], inventory: [item('A', 0, 100), item('B', 70, 40), item('C', 50, 30)] });
+    const texts = (await copilot.ask('SKU-X')).recommendations.map((r) => r.text);
+    expect(texts).toEqual([
+      'Consider transferring up to 30 units of SKU-X from B to A.',
+      'Consider transferring up to 20 units of SKU-X from C to A.',
+      'Raise a replenishment order for SKU-X at A: 50 units still needed to reach safety stock.',
+    ]);
+  });
+
+  it('matches whole IDs only, case-insensitively, and handles shipments and SKUs together', async () => {
+    const a = await ctx.copilot.ask('compare shp-1004 with sku-10.');
+    expect(a.facts.some((f) => f.ids.includes('SHP-1004'))).toBe(true);
+    expect(a.facts.some((f) => f.ids.includes('SKU-10@Tashkent'))).toBe(true);
+    // "SKU-10-BLUE" is not SKU-10: no record is matched, so only the help hint is shown.
+    const partial = await ctx.copilot.ask('SKU-10-BLUE');
+    expect(partial.intent).toBe('help');
+    expect(citedIds(partial)).toEqual([]);
+  });
+
+  it('says when a summary lists only the most severe risks', async () => {
+    const a = await ctx.copilot.ask('summary');
+    expect(a.facts[0].text).toMatch(/The 5 most severe are listed; see the Risk Center for all\.$/);
   });
 
   it('explains what it can answer when the question matches nothing', async () => {

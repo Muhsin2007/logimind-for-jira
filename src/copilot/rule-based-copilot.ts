@@ -4,9 +4,13 @@ import type { CopilotToolbox, DataFreshness } from './tools';
 
 export const MAX_QUESTION = 500;
 const SUMMARY_WORDS = /\b(risk|risks|summary|overview|today|briefing|problem|issues)\b|риск|сводк|сегодня|обзор|проблем|xavf/i;
-/** Something that looks like a record ID (e.g. SHP-9999) but may not exist. */
-const ID_LIKE = /\b[A-Z]{2,6}-\d{2,}\b/gi;
+/** Candidate identifiers in a question: same character set as imported IDs. */
+const TOKEN = /[A-Z0-9][A-Z0-9._/-]*/g;
+/** A token shaped like a record ID (e.g. SHP-9999) that may not exist. */
+const ID_LIKE = /^[A-Z]{2,6}-\d+$/;
+const MAX_ENTITIES = 3;
 const STALE_DAYS = 7;
+const SUMMARY_SIZE = 5;
 
 /**
  * Answers logistics questions without an AI model: it recognises which records a question
@@ -18,23 +22,23 @@ export class RuleBasedCopilot {
   async ask(rawQuestion: string): Promise<CopilotAnswer> {
     const question = rawQuestion.trim().slice(0, MAX_QUESTION);
     const [known, freshness] = await Promise.all([this.tools.listKnownIds(), this.tools.getDataFreshness()]);
-    const upper = question.toUpperCase();
-    const mentions = (id: string) => new RegExp(`(^|[^A-Z0-9])${escapeRegExp(id.toUpperCase())}([^A-Z0-9]|$)`).test(upper);
-
-    const shipmentIds = known.shipmentIds.filter(mentions).slice(0, 3);
-    const skus = known.skus.filter(mentions).slice(0, 3);
-    const unknownIds = [...new Set((question.match(ID_LIKE) ?? []).map((m) => m.toUpperCase()))].filter(
-      (id) => !known.shipmentIds.some((s) => s.toUpperCase() === id) && !known.skus.some((s) => s.toUpperCase() === id),
-    );
+    // Whole-token, case-insensitive matching against IDs that exist: "SKU-1" never matches "SKU-1-BLUE".
+    const tokens = [...new Set((question.toUpperCase().match(TOKEN) ?? []).map((t) => t.replace(/[._/-]+$/, '')))];
+    const shipmentByUpper = new Map(known.shipmentIds.map((id) => [id.toUpperCase(), id]));
+    const skuByUpper = new Map(known.skus.map((id) => [id.toUpperCase(), id]));
+    const shipmentIds = tokens.flatMap((t) => shipmentByUpper.get(t) ?? []);
+    const skus = tokens.flatMap((t) => (shipmentByUpper.has(t) ? [] : skuByUpper.get(t) ?? []));
+    const unknownIds = tokens.filter((t) => ID_LIKE.test(t) && !shipmentByUpper.has(t) && !skuByUpper.has(t));
 
     let intent: CopilotIntent = 'help';
     let body: Body = emptyBody();
-    if (shipmentIds.length > 0) {
-      intent = 'shipment';
-      body = merge(await Promise.all(shipmentIds.map((id) => this.shipment(id))));
-    } else if (skus.length > 0) {
-      intent = 'inventory';
-      body = merge(await Promise.all(skus.map((sku) => this.inventory(sku))));
+    if (shipmentIds.length + skus.length > 0) {
+      intent = shipmentIds.length > 0 ? 'shipment' : 'inventory';
+      const entities = [...shipmentIds.map((id) => () => this.shipment(id)), ...skus.map((sku) => () => this.inventory(sku))];
+      body = merge(await Promise.all(entities.slice(0, MAX_ENTITIES).map((load) => load())));
+      if (entities.length > MAX_ENTITIES) {
+        body.unknowns.push(`Only the first ${MAX_ENTITIES} of ${entities.length} mentioned records are answered; ask about the rest separately.`);
+      }
     } else if (SUMMARY_WORDS.test(question)) {
       intent = 'risk_summary';
       body = await this.summary();
@@ -46,8 +50,11 @@ export class RuleBasedCopilot {
     }
     for (const id of unknownIds) body.unknowns.push(`${id} was not found in the imported shipments or inventory.`);
     body.unknowns.push(...staleness(freshness));
+    const linkError = intent === 'help' ? null : await this.tools.getLinkLookupError();
+    if (linkError) body.unknowns.push(`Linked Jira issues could not be checked: ${linkError}`);
 
-    return { mode: 'rules', intent, question, ...body, dataAsOf: freshness };
+    const { today, shipmentsImportedAt, inventoryImportedAt } = freshness;
+    return { mode: 'rules', intent, question, ...body, dataAsOf: { today, shipmentsImportedAt, inventoryImportedAt } };
   }
 
   private async shipment(id: string): Promise<Body> {
@@ -59,7 +66,7 @@ export class RuleBasedCopilot {
     }
     const s = detail.shipment;
     out.facts.push({
-      text: `${s.id}: ${s.qty} × ${s.sku}${s.productName ? ` (${s.productName})` : ''} from ${s.supplier} to ${s.warehouse}; status ${s.status.replace('_', ' ')}, planned ${s.plannedArrival}, ETA ${s.eta ?? 'not provided'}${s.actualArrival ? `, arrived ${s.actualArrival}` : ''}.`,
+      text: `${s.id}: ${s.qty} × ${s.sku}${s.productName ? ` (${s.productName})` : ''} from ${s.supplier} to ${s.warehouse}; status ${s.status.replaceAll('_', ' ')}, planned ${s.plannedArrival}, ETA ${s.eta ?? 'not provided'}${s.actualArrival ? `, arrived ${s.actualArrival}` : ''}.`,
       ids: [s.id],
     });
     if (detail.risks.length === 0) out.facts.push({ text: `No risk rule is triggered for ${s.id}.`, ids: [s.id] });
@@ -111,10 +118,10 @@ export class RuleBasedCopilot {
   }
 
   private async summary(): Promise<Body> {
-    const s = await this.tools.getRiskSummary({ limit: 5 });
+    const s = await this.tools.getRiskSummary({ limit: SUMMARY_SIZE });
     const out = emptyBody();
     out.facts.push({
-      text: `${s.total} open risk${s.total === 1 ? '' : 's'} on ${s.today}: ${s.bySeverity.critical} critical, ${s.bySeverity.high} high, ${s.bySeverity.medium} medium, ${s.bySeverity.low} low.`,
+      text: `${s.total} open risk${s.total === 1 ? '' : 's'} on ${s.today}: ${s.bySeverity.critical} critical, ${s.bySeverity.high} high, ${s.bySeverity.medium} medium, ${s.bySeverity.low} low.${s.total > s.top.length ? ` The ${s.top.length} most severe are listed; see the Risk Center for all.` : ''}`,
       ids: [],
     });
     for (const risk of s.top) out.facts.push({ text: `${capitalise(risk.severity)}: ${risk.title}.`, ids: [risk.id] });
@@ -153,16 +160,17 @@ function stockFact(row: InventoryRow): string {
 
 function staleness(f: DataFreshness): string[] {
   const out: string[] = [];
-  const check = (label: string, at: string | null) => {
-    if (!at) out.push(`No ${label} import is recorded, so ${label} data may be missing.`);
-    else if ((Date.parse(`${f.today}T00:00:00Z`) - Date.parse(at)) / 86_400_000 > STALE_DAYS) {
+  const check = (label: string, at: string | null, hasData: boolean) => {
+    if (!at) {
+      // Import history keeps only recent batches, so data can exist without a recorded import time.
+      out.push(hasData ? `The ${label} import time is no longer in the import history, so its freshness is unknown.` : `No ${label} data has been imported.`);
+    } else if ((Date.parse(`${f.today}T00:00:00Z`) - Date.parse(at)) / 86_400_000 > STALE_DAYS) {
       out.push(`${capitalise(label)} data was last imported ${at.slice(0, 10)} and may be stale.`);
     }
   };
-  check('shipment', f.shipmentsImportedAt);
-  check('inventory', f.inventoryImportedAt);
+  check('shipment', f.shipmentsImportedAt, f.hasShipments);
+  check('inventory', f.inventoryImportedAt, f.hasInventory);
   return out;
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');

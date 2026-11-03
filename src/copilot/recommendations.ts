@@ -59,7 +59,6 @@ function recommendForStock(risk: RiskEvent, stock: InventoryRow[]): CopilotRecom
   const row = stock.find((r) => `${r.sku}@${r.warehouse}` === risk.entityKey);
   if (!row) return [];
   const priority = PRIORITY[risk.severity];
-  const need = Math.max(row.shortfall, row.safetyStock - row.available, 0);
   const out: CopilotRecommendation[] = [];
 
   if (row.inboundShipmentIds.length > 0) {
@@ -72,26 +71,32 @@ function recommendForStock(risk: RiskEvent, stock: InventoryRow[]): CopilotRecom
     });
   }
 
-  // Only suggest a transfer from warehouses that stay at or above their own safety stock.
+  // Units still needed: with nothing available now, enough to reach safety stock today;
+  // otherwise the gap that remains after inbound stock arrives.
+  let remaining = row.available <= 0 ? row.safetyStock - row.available : row.shortfall;
+
+  // A donor gives only what keeps it at or above its own safety stock now and after its inbound.
   for (const other of stock) {
-    if (other === row) continue;
-    const surplus = other.available - other.safetyStock;
-    if (surplus <= 0 || need <= 0) continue;
+    if (other === row || remaining <= 0) continue;
+    const surplus = Math.min(other.available, other.projected) - other.safetyStock;
+    if (surplus <= 0) continue;
+    const qty = Math.min(surplus, remaining);
+    remaining -= qty;
     out.push({
       priority,
-      text: `Consider transferring up to ${Math.min(surplus, need)} units of ${row.sku} from ${other.warehouse} to ${row.warehouse}.`,
+      text: `Consider transferring up to ${qty} units of ${row.sku} from ${other.warehouse} to ${row.warehouse}.`,
       ids: [`${other.sku}@${other.warehouse}`, risk.id],
       evidence: `${other.warehouse} has ${other.available} available against safety stock ${other.safetyStock}.`,
       confidence: 'medium',
     });
   }
 
-  if (out.length === 0 && need > 0) {
+  if (remaining > 0) {
     out.push({
       priority,
-      text: `Raise a replenishment order for ${row.sku} at ${row.warehouse}: ${need} units needed to reach safety stock.`,
+      text: `Raise a replenishment order for ${row.sku} at ${row.warehouse}: ${remaining} units still needed to reach safety stock.`,
       ids: [risk.id],
-      evidence: `Available ${row.available}, no inbound within 7 days, safety stock ${row.safetyStock}.`,
+      evidence: `Available ${row.available}, inbound within 7 days ${row.inboundSoon}, safety stock ${row.safetyStock}.`,
       confidence: 'medium',
     });
   }

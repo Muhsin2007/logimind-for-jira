@@ -8,7 +8,30 @@ Last updated: 2026-11-02
 | 1 — Environment and Hello World | ✅ Done — verified inside Jira |
 | 2 — Core application | ✅ Done — verified inside Jira (dev environment, app v4.0.0) |
 | 3 — Jira integration | ✅ Done — verified inside Jira (app v5.2.0) |
-| 4–7 | ⏳ Not started |
+| 4 — AI Logistics Copilot | 🟡 Done in **rule-based mode** (no AI provider: user declined paid Forge LLMs for now) — verified in Jira (v5.5.0) |
+| 5–7 | ⏳ Not started |
+
+## Phase 4 — Logistics Copilot
+
+**Decision (user, 2026-11-03):** Forge LLMs are billed to the app developer with no free quota (~$0.005/question on Haiku 4.5, ~$0.02 on Sonnet). The user chose **"no LLM for now"**. The copilot is therefore built so a model can be plugged in later, and today runs honestly labelled as *rule-based, no AI*.
+
+**Built**
+- `src/copilot/tools.ts` — read-only `CopilotToolbox`: `getRiskSummary`, `getShipment`, `getInventory`, `getLinkedJiraIssue`, `getDataFreshness`, `listKnownIds`. Same tools planned for the Rovo agent actions.
+- `src/copilot/rule-based-copilot.ts` — recognises known shipment IDs / SKUs (only IDs present in the data) or summary questions (EN/RU keywords); IDs that look real but do not exist are reported as unknown, never answered.
+- `src/copilot/recommendations.ts` — deterministic, evidence-cited next steps: contact supplier/carrier (late), check dependent orders (ETA slip), request ETA (missing), prioritise inbound, transfer only from a warehouse that stays above its own safety stock, replenish.
+- Answer contract: verified facts with cited IDs, recommendations (priority, evidence, confidence), unknowns (missing ETA/carrier/inventory/unit cost, stale or missing imports), data freshness, `mode: 'rules'`.
+- Copilot tab with example questions; resolver `askCopilot` (≤500 chars).
+
+**Verified**
+- `npx vitest run`: **71 passed** (+ copilot 8, run against the real demo dataset).
+- In Jira: "Status of SHP-1004" (facts, SCRUM-5 link + status, destination stock-out, recommendations), "Where is SHP-9999?" (nothing invented, reported as unknown), "Сводка рисков на сегодня" (summary + top risks).
+
+**ecc review** (`ecc:code-reviewer`) — fixed: ~10 storage snapshots and one Jira call per risk per question (now one snapshot + one link lookup via a request-scoped toolbox), transfer suggestions over-promising across donors and hiding the remaining gap, substring ID matches (`SKU-1` in `SKU-1-BLUE`), shipment questions ignoring SKUs, silent truncation to 3 records / top 5 risks, pruned import history reported as "no data", dropped Jira status errors, unclamped `limit`, case-sensitive IDs. Re-verified in Jira on v5.6.0 ("Stock of SKU-10" → transfer exactly 100 units). Tests: **74 passed**.
+- Deferred to Phase 5 (Rovo): tools return free-text CSV fields verbatim; Rovo actions must return trimmed DTOs and mark free text as untrusted data.
+
+**Limitations**
+- No natural-language understanding beyond IDs and summary keywords; answers are in English.
+- To enable AI later: add the `llm` module (major version upgrade), a Forge LLM provider that may only call the same tools, and validate every cited ID against the data before showing an answer.
 
 ## Phase 3 — Jira integration
 

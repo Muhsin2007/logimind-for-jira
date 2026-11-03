@@ -87,6 +87,17 @@ export class LogisticsService {
     return { today: snap.today, items };
   }
 
+  /** Shipments, stock positions and risks from a single snapshot (one storage read). */
+  async overview(): Promise<{ today: IsoDate; shipments: ShipmentRow[]; items: InventoryRow[]; risks: RiskEvent[] }> {
+    const snap = await this.snapshot();
+    return {
+      today: snap.today,
+      shipments: snap.shipments.map((s) => toShipmentRow(s, snap.risksByEntity.get(`shipment:${s.id}`) ?? [])),
+      items: snap.inventory.map((i) => toInventoryRow(i, snap)),
+      risks: snap.risks,
+    };
+  }
+
   async listRisks(): Promise<{ today: IsoDate; risks: RiskEvent[] }> {
     const snap = await this.snapshot();
     return { today: snap.today, risks: snap.risks };
