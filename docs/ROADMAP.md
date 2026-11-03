@@ -25,7 +25,7 @@ Judging criteria are equally weighted: Technological implementation, Design, Pot
 | Week | Status (2026-11-03) |
 |---|---|
 | 1 | ✅ Done — dev v6.6.0, production v3.0.0 |
-| 2 | ✅ Done on dev (v6.7.0): days of cover + projected stock-out, what-if delay simulator (UI, Copilot tool, Rovo action); plus EN/RU language switch (author request). Production not updated |
+| 2 | ✅ Done — dev v6.8.0, production v3.1.0: days of cover + projected stock-out, what-if delay simulator (UI, Copilot tool, Rovo action); plus EN/RU language switch (author request) |
 | 3–7 | Not started |
 
 ## Presentation story

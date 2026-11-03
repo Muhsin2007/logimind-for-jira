@@ -31,7 +31,7 @@ Last updated: 2026-11-03
 
 **Not verified / open**
 - Issue sidebar and column-mapping step in Russian were not opened live; Rovo action not testable (no Rovo).
-- Production is still v3.0.0 — deploying week 2 there needs the author's approval.
+- Production deployed as **v3.1.0** (commit `07ad3ef`, author-approved 2026-11-03; minor, no new scopes). It has no installations, so week 2 was verified on the development install only; judges get v3.1.0 through the install link.
 
 ## Roadmap week 1 — Forge LLM: AI column mapping and AI Copilot (2026-11-03)
 
