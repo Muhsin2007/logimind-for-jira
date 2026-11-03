@@ -16,6 +16,14 @@ describe('parseCsv delimiter detection', () => {
     expect(t.rows[0].cells).toEqual(['x; y', '2']);
   });
 
+  it('reads tab-separated rows pasted from Excel', () => {
+    const pasted = 'Item Code\tQty\nA-1\t5\n';
+    const t = parseCsv(pasted);
+    expect(t.header).toEqual(['item code', 'qty']);
+    expect(t.rows[0].cells).toEqual(['A-1', '5']);
+    expect(applyMapping(pasted, ['sku', null])).toBe('sku\t\nA-1\t5\n');
+  });
+
   it('keeps commas as the delimiter when the header has them', () => {
     expect(parseCsv('a,b;c\n1,2\n').header).toEqual(['a', 'b;c']);
   });

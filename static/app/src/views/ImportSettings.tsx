@@ -31,6 +31,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [pending, setPending] = useState<PendingMapping[]>([]);
+  const [pasted, setPasted] = useState('');
 
   const run = async (kind: Busy, action: () => Promise<void>) => {
     setBusy(kind);
@@ -45,33 +46,44 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
     }
   };
 
-  const upload = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  /** Imports each text; a header problem becomes a column-mapping step instead of a failure. */
+  const importTexts = (items: { filename: string; read: () => Promise<string | null> }[], after?: () => void) =>
     void run('upload', async () => {
       const results: { filename: string; outcome: ImportOutcome }[] = [];
       const mappings: PendingMapping[] = [];
-      for (const file of Array.from(files)) {
-        if (file.size > MAX_BYTES) {
-          results.push({ filename: file.name, outcome: { ok: false, errors: [{ line: 0, field: null, message: 'File is larger than 1 MB' }] } });
+      for (const { filename, read } of items) {
+        const content = await read();
+        if (content === null || content.length > MAX_BYTES) {
+          results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: 'File is larger than 1 MB' }] } });
           continue;
         }
-        const content = await file.text();
-        const outcome = await call('importCsv', { filename: file.name, content });
+        const outcome = await call('importCsv', { filename, content });
         if (isHeaderProblem(outcome)) {
           // Ask for a column mapping (AI-proposed when names do not match) instead of failing the file.
-          const proposal = await call('proposeColumnMapping', { filename: file.name, content });
+          const proposal = await call('proposeColumnMapping', { filename, content });
           if (proposal.ok) {
-            mappings.push({ filename: file.name, content, proposal });
+            mappings.push({ filename, content, proposal });
             continue;
           }
         }
-        results.push({ filename: file.name, outcome });
+        results.push({ filename, outcome });
       }
       setOutcomes(results);
       setPending(mappings);
-      if (fileInput.current) fileInput.current.value = '';
+      after?.();
     });
+
+  const upload = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    importTexts(
+      Array.from(files).map((file) => ({ filename: file.name, read: () => (file.size > MAX_BYTES ? Promise.resolve(null) : file.text()) })),
+      () => {
+        if (fileInput.current) fileInput.current.value = '';
+      },
+    );
   };
+
+  const importPasted = () => importTexts([{ filename: 'pasted-from-excel.csv', read: () => Promise.resolve(pasted) }], () => setPasted(''));
 
   const confirmMapping = (item: PendingMapping, kind: ImportKind, mapping: (string | null)[]) =>
     void run('map', async () => {
@@ -84,7 +96,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
     <div className="stack">
       <Panel title="Import CSV">
         <p>
-          Upload a <strong>shipments</strong> or <strong>inventory</strong> CSV (UTF-8, comma or semicolon separated as exported by Excel,
+          Upload a <strong>shipments</strong> or <strong>inventory</strong> CSV (UTF-8, comma, semicolon or tab separated as exported by Excel,
           max 1 MB). The file type is detected from its header; if your supplier uses other column names, AI proposes a column mapping for
           you to confirm. Each import <strong>replaces</strong> the current dataset of that type; rows that fail validation are rejected and listed
           below, never silently used.
@@ -105,6 +117,24 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           />
           {busy === 'upload' && <span className="muted">Importing… (unrecognised columns are mapped with AI)</span>}
         </div>
+        <details>
+          <summary>Or paste rows copied from Excel</summary>
+          <label htmlFor="csv-paste" className="muted small">Copy the cells including the header row from Excel or Google Sheets and paste them here.</label>
+          <textarea
+            id="csv-paste"
+            className="input paste-box"
+            rows={6}
+            value={pasted}
+            maxLength={MAX_BYTES}
+            disabled={busy !== null || !canManage}
+            onChange={(e) => setPasted(e.target.value)}
+          />
+          <div className="row">
+            <button type="button" className="btn" disabled={busy !== null || !canManage || !pasted.trim()} onClick={importPasted}>
+              Import pasted rows
+            </button>
+          </div>
+        </details>
         {error && <p role="alert" className="text-danger">{error}</p>}
         {pending.map((item) => (
           <ColumnMapping

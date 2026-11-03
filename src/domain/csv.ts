@@ -6,27 +6,31 @@ export interface CsvTable {
 
 export class CsvParseError extends Error {}
 
-export type Delimiter = ',' | ';';
+export type Delimiter = ',' | ';' | '\t';
 
 /**
- * Excel in many locales exports CSV with semicolons. The header decides: semicolons win only
- * when the header (outside quotes) has more of them than commas.
+ * Excel in many locales exports CSV with semicolons, and cells copied from Excel are
+ * tab-separated. The header decides: another delimiter wins only when the header (outside
+ * quotes) has more of it than commas.
  */
 export function detectDelimiter(text: string): Delimiter {
   let commas = 0;
   let semicolons = 0;
+  let tabs = 0;
   let inQuotes = false;
   for (const ch of text) {
     if (ch === '"') inQuotes = !inQuotes;
     else if (!inQuotes && (ch === '\n' || ch === '\r')) break;
     else if (!inQuotes && ch === ',') commas++;
     else if (!inQuotes && ch === ';') semicolons++;
+    else if (!inQuotes && ch === '\t') tabs++;
   }
+  if (tabs > commas && tabs > semicolons) return '\t';
   return semicolons > commas ? ';' : ',';
 }
 
 /**
- * Minimal RFC 4180 parser: comma (or, for Excel exports, semicolon) separated, double-quoted
+ * Minimal RFC 4180 parser: comma (or, for Excel, semicolon or tab) separated, double-quoted
  * fields, `""` escapes, CRLF or LF line endings. Blank lines are skipped. A leading BOM is ignored.
  */
 export function parseCsv(text: string, opts: { keepHeaderCase?: boolean } = {}): CsvTable {
