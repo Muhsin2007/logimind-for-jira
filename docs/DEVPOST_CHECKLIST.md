@@ -12,7 +12,7 @@ Deadline: **2026-12-22 12:00 PT** (2026-12-23 01:00 Tashkent). Rules read 2026-1
 - [x] Pre-publication scan: PASS-WITH-WARNINGS (no secrets; see below)
 
 ## Needs the author (approval or action)
-- [ ] **Decide commit e-mail before publishing** — history contains the personal address in commit metadata. Option: rewrite to a GitHub `noreply` address before the first push.
+- [x] **Commit e-mail** — author decided (2026-11-03) to keep the personal address in commit metadata; history is not rewritten.
 - [ ] **Optional:** replace the developer site name in `docs/` with `<your-site>`.
 - [ ] **GitHub:** `gh auth login`, then approve creating a **public** repository and pushing.
 - [ ] **Production deploy:** approve `forge deploy -e production` (judges should get the production environment).
