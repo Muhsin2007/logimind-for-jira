@@ -8,10 +8,30 @@ Last updated: 2026-11-03
 | 1 — Environment and Hello World | ✅ Done — verified inside Jira |
 | 2 — Core application | ✅ Done — verified inside Jira (dev environment, app v4.0.0) |
 | 3 — Jira integration | ✅ Done — verified inside Jira (app v5.2.0) |
-| 4 — AI Logistics Copilot | ✅ Done — **AI mode via Forge LLM** with rule-based fallback (Roadmap week 1), verified in Jira on the dev environment (v6.6.0) |
+| 4 — AI Logistics Copilot | ✅ Done — **AI mode via Forge LLM** with rule-based fallback (Roadmap week 1), verified in Jira on the dev environment (v6.6.0); answers in EN or RU and can run the what-if tool (v6.7.0) |
 | 5 — Rovo agent (bonus) | 🟡 Built, lint-clean and deployed (v5.8.0); **not verified live** — Rovo/Agent Studio is not available on the dev site |
 | 6 — Quality assurance | ✅ Done — see `docs/TEST_REPORT.md` (110 tests, 81 % coverage, v5.9.0); 3 manual checks left for the user |
 | 7 — Submission prep | 🟡 Repository ready (README, MIT LICENSE, ARCHITECTURE, DECISIONS, Devpost texts, demo script, checklist; sanitizer PASS-WITH-WARNINGS). Publishing, production deploy, install link and video need the author — see `docs/DEVPOST_CHECKLIST.md` |
+
+## Roadmap week 2 — days of cover, what-if simulator; EN/RU language switch (2026-11-03)
+
+**Decisions:** D17 (EN/RU), D18 (days of cover is a projection, no new risk, `RULE_VERSION` stays 1.2.0), D19 (what-if in the browser + read-only tools).
+
+**Built**
+- **Copilot notice** shortened to one line with a check glyph; the per-answer mode line and the rule-based fallback notice are unchanged.
+- **EN/RU** — `static/app/src/i18n/{en,ru}.ts` + `I18nProvider`/`useI18n` (text, locale number/date formatting, switch). `ru` is typed as `Messages = typeof en`, and `tests/ui/i18n.test.ts` checks keys, function arity, empty strings and untranslated text. Every view, empty/error state, the column-mapping step and the issue sidebar are translated; risk titles are rebuilt in Russian from evidence. `askCopilot` takes `locale`; the system prompt asks for natural Russian with IDs, ISO dates and plain digits, so verification is unchanged. Server text stays English (D17).
+- **Days of cover** — optional `daily_usage` (decimal, 0–1e9) in import, AI column mapping and demo data; `src/domain/cover.ts` (`projectCover`, `buildPipelineIndex`, `coverFor`); `InventoryRow.cover`; Inventory columns "Use / day" and "Days of cover", drawer facts; Copilot/Rovo `get_inventory`/`get_shipment` include `daysOfCover`, `stockOutDate`, `belowSafetyStockFrom`. Rows imported before the column existed show "—".
+- **What-if** — `src/domain/what-if.ts` (`simulateDelay`, `delayCandidates`): one shipment or a supplier's upcoming shipments, delay 0–30 days, before/after low-stock severity (7-day rule), days of cover, stock-out and safety dates, "worse" flag, untracked locations. New **What-if** tab (radio + select + slider, live results), "Simulate a delay" in the drawer. Read-only tool `simulate_delay` for the AI Copilot and Rovo action `simulate-delay` (manifest + prompt).
+
+**Verified**
+- `npx vitest run`: **195 passed** (159 → 195); coverage of `src/` 84.5 %. `npm run build`, `forge lint` clean.
+- Dev deployed **v6.7.0** (minor; no new scopes), site already at latest. In Jira (Claude in Chrome): English by default; RU switch on Dashboard, Shipments, Inventory, What-if, drawer, Copilot; choice survives reload. Demo data reloaded so it has `daily_usage`. What-if slider updates live; drawer → What-if preselects SHP-1001 (27 d → 12 d). Copilot in Russian answered a what-if question in AI mode using `simulate_delay`, values verified (1 question ≈ 3 model calls).
+
+**ecc review** (`ecc:typescript-reviewer`, `ecc:react-reviewer`, no critical/high) — fixed: `simulate_delay` with both shipmentId and supplier delayed the whole supplier (shipment now wins), the verifier read "1,50" as 150 (a comma is now only a thousands separator), unbounded supplier-wide tool results (capped at 15 + totals, unknown supplier lists the valid ones), NaN usage looking "safe", stale What-if preselect on later visits, a silent fallback when the preselected shipment is no longer upcoming (notice), lost focus after "Simulate a delay", per-tick slider work (`useDeferredValue`), screen-reader names for the EN/RU buttons and the "no usage" dash, `lang` set before first paint. Deferred: language switch outside the drawer's inert region; 7-day colour threshold not a shared constant; duplicate shipment IDs (prevented by the importer).
+
+**Not verified / open**
+- Issue sidebar and column-mapping step in Russian were not opened live; Rovo action not testable (no Rovo).
+- Production is still v3.0.0 — deploying week 2 there needs the author's approval.
 
 ## Roadmap week 1 — Forge LLM: AI column mapping and AI Copilot (2026-11-03)
 

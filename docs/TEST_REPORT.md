@@ -6,8 +6,8 @@ Last updated: 2026-11-03 (Phase 6). App version under test: **v5.9.0** (Forge de
 
 | Check | Result |
 |---|---|
-| Unit / component tests (`npx vitest run`) | **110 passed, 0 failed** (10 files) |
-| Statement coverage of `src/` (`vitest --coverage`) | **81.1 %** (was 66.6 % before Phase 6). Domain, copilot, agent, auth, lock: 93–100 %. Untested: `index.ts` wiring, `kvs-issue-links.ts` |
+| Unit / component tests (`npx vitest run`) | **195 passed, 0 failed** (18 files) — 2026-11-03, roadmap week 2 + EN/RU (was 159 after week 1, 110 in Phase 6) |
+| Statement coverage of `src/` (`vitest --coverage --coverage.include='src/**'`) | **84.5 %** (week 2; `cover.ts` and `what-if.ts` 100 % of lines). Phase 6: 81.1 %. Domain, copilot, agent, auth, lock: 93–100 %. Untested: `index.ts` wiring, `kvs-issue-links.ts` |
 | Type check (backend + UI) | Pass |
 | `forge lint` | No issues |
 | Production dependency audit | Backend: 5 moderate, all transitive in Atlassian's `@forge/manifest` (`glob`, `minimatch`) — build-time manifest parsing, not reachable from user input. UI: prosemirror advisories via `@forge/bridge`, not present in the built bundle. |
@@ -33,6 +33,17 @@ Last updated: 2026-11-03 (Phase 6). App version under test: **v5.9.0** (Forge de
 | Storage failures | ✅ unit | Service propagates write failures; KVS rollback removes only added keys; lock errors are not misreported as "busy"; agent returns "data unavailable" |
 | Permissions | 🟡 unit + live (admin) | `forge-adapters.test.ts`: ADMINISTER check grants only on explicit `true`, denies on errors, `requireDataManager` throws. Live: admin path works. ⛔ Non-admin path needs a second Jira account. |
 | UI responsiveness | ⛔ manual | The Chrome window could not be resized from automation (maximised) and the iframe is not inspectable. The CSS uses auto-fit grids and a 640 px breakpoint; manual check below. |
+
+## Roadmap week 2 + EN/RU (2026-11-03, dev v6.7.0)
+
+| Area | Status | Evidence |
+|---|---|---|
+| `daily_usage` import validation | ✅ unit | `importer.test.ts`: decimals, 0, blank → null, −1 / text / > 1e9 rejected by line |
+| Days of cover math | ✅ unit + live | `cover.test.ts` (10 tests: no usage, whole days, stock-out today, inbound before/after stock-out, just-in-time arrival, overdue ignored, safety date, horizon, fractional usage); `logistics-service.test.ts` (pipeline beyond 7 days, legacy rows without usage). Live: Inventory shows e.g. SKU-03 Tashkent "3 дн., закончится 06 нояб." |
+| What-if simulator | ✅ unit + live | `what-if.test.ts` (8 tests incl. supplier mode, overdue excluded, untracked locations, clamping, demo stories). Live: slider 7 → 16 days updates instantly; drawer "Simulate a delay" opens SHP-1001 preselected (27 d → 12 d) |
+| Copilot/Rovo `simulate_delay` | ✅ unit, 🟡 live | `actions.test.ts` (+3), `llm-copilot.test.ts` (+1). Live: Russian question "что будет, если SHP-1001 задержится на 10 дней?" → AI answer in Russian, mode AI, values verified. Rovo action ⛔ (Rovo not provisioned) |
+| EN/RU switch | ✅ unit + live | `tests/ui/i18n.test.ts` (same keys/arity, no empty text, Russian really translated, plurals, risk titles); TypeScript `ru: Messages`. Live: English by default, RU on Dashboard/Inventory/What-if/Shipments/drawer/Copilot, choice kept after reload |
+| Not verified live | ⛔ | Issue sidebar and column-mapping step in Russian (covered by type check only); Rovo action |
 
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
