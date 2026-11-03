@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { call, errorMessage, type CitedStatement, type CopilotAnswer } from '../api';
 import { Panel } from '../components';
-import { fmtDateTime } from '../format';
 import type { NavProps } from '../App';
+import { useI18n } from '../i18n';
 
-const EXAMPLES = ["Today's risk summary", 'Which delays hurt stock the most?', 'Why is SHP-1004 a problem and what should I do?', 'Stock of SKU-10', 'Where is SHP-9999?'];
 const MAX_QUESTION = 500;
 
 export function Copilot(_props: NavProps) {
@@ -12,6 +11,7 @@ export function Copilot(_props: NavProps) {
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<CopilotAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { t, locale } = useI18n();
 
   const ask = async (q: string) => {
     const text = q.trim();
@@ -20,7 +20,8 @@ export function Copilot(_props: NavProps) {
     setBusy(true);
     setError(null);
     try {
-      setAnswer(await call('askCopilot', { question: text }));
+      // The AI writes its answer in the person's UI language.
+      setAnswer(await call('askCopilot', { question: text, locale }));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -37,26 +38,26 @@ export function Copilot(_props: NavProps) {
     <div className="stack">
       <p className="notice ai-notice" role="note">
         <span className="check" aria-hidden="true">✓</span>{' '}
-        <strong>AI by Claude on Atlassian.</strong> Every ID, number and date is checked against your data.
+        <strong>{t.aiNotice}</strong> {t.aiNoticeDetail}
       </p>
 
       <form className="copilot-form" onSubmit={submit}>
-        <label htmlFor="copilot-q" className="h4">Ask about shipments, stock or risks</label>
+        <label htmlFor="copilot-q" className="h4">{t.askLabel}</label>
         <div className="row">
           <input
             id="copilot-q"
             className="input copilot-input"
             value={question}
             maxLength={MAX_QUESTION}
-            placeholder="e.g. Status of SHP-1004"
+            placeholder={t.askPlaceholder}
             onChange={(e) => setQuestion(e.target.value)}
           />
           <button type="submit" className="btn btn-primary" disabled={busy || !question.trim()}>
-            {busy ? 'Answering…' : 'Ask'}
+            {busy ? t.answering : t.ask}
           </button>
         </div>
-        <div className="row" aria-label="Example questions">
-          {EXAMPLES.map((q) => (
+        <div className="row" aria-label={t.examplesLabel}>
+          {t.examples.map((q) => (
             <button key={q} type="button" className="btn btn-subtle chip" onClick={() => void ask(q)} disabled={busy}>
               {q}
             </button>
@@ -71,28 +72,29 @@ export function Copilot(_props: NavProps) {
 }
 
 function AnswerView({ answer }: { answer: CopilotAnswer }) {
+  const { t, fmt } = useI18n();
   const freshness = [
-    answer.dataAsOf.shipmentsImportedAt && `shipments imported ${fmtDateTime(answer.dataAsOf.shipmentsImportedAt)}`,
-    answer.dataAsOf.inventoryImportedAt && `inventory imported ${fmtDateTime(answer.dataAsOf.inventoryImportedAt)}`,
+    answer.dataAsOf.shipmentsImportedAt && t.shipmentsImportedAt(fmt.dateTime(answer.dataAsOf.shipmentsImportedAt)),
+    answer.dataAsOf.inventoryImportedAt && t.inventoryImportedAt(fmt.dateTime(answer.dataAsOf.inventoryImportedAt)),
   ].filter(Boolean);
 
   return (
     <div className="stack" aria-live="polite">
       {answer.fallbackReason && (
-        <p className="notice" role="note"><strong>Rule-based answer.</strong> {answer.fallbackReason}</p>
+        <p className="notice" role="note"><strong>{t.ruleBasedAnswer}</strong> {t.fallbackText(answer.fallbackReason)}</p>
       )}
-      <Panel title="Verified facts">
-        {answer.facts.length === 0 ? <p className="muted">No matching records in the current data.</p> : <Statements items={answer.facts} />}
+      <Panel title={t.verifiedFacts}>
+        {answer.facts.length === 0 ? <p className="muted">{t.noMatchingRecords}</p> : <Statements items={answer.facts} />}
       </Panel>
-      <Panel title="Recommended next steps">
+      <Panel title={t.nextSteps}>
         {answer.recommendations.length === 0 ? (
-          <p className="muted">No action is suggested: the data does not support one.</p>
+          <p className="muted">{t.noActionSuggested}</p>
         ) : (
           <ol className="answer-list">
             {answer.recommendations.map((r, i) => (
               <li key={i}>
-                <span className={`badge prio-${r.priority}`}>{r.priority} priority</span> {r.text}
-                <div className="muted small">Based on: {r.evidence} · confidence {r.confidence}</div>
+                <span className={`badge prio-${r.priority}`}>{t.priority[r.priority]}</span> {r.text}
+                <div className="muted small">{t.basedOn(r.evidence, t.confidence[r.confidence])}</div>
                 <Ids ids={r.ids} />
               </li>
             ))}
@@ -100,14 +102,14 @@ function AnswerView({ answer }: { answer: CopilotAnswer }) {
         )}
       </Panel>
       {answer.unknowns.length > 0 && (
-        <Panel title="Unknown or missing data">
+        <Panel title={t.unknownData}>
           <ul className="answer-list">
             {answer.unknowns.map((u) => <li key={u}>{u}</li>)}
           </ul>
         </Panel>
       )}
       <p className="muted small">
-        Evaluated {answer.dataAsOf.today}{freshness.length > 0 ? ` · ${freshness.join(' · ')}` : ''} · mode: {answer.mode === 'rules' ? 'rules, no AI' : 'AI (Forge LLM), IDs and numbers verified'}
+        {t.evaluated(fmt.date(answer.dataAsOf.today))}{freshness.length > 0 ? ` · ${freshness.join(' · ')}` : ''} · {answer.mode === 'rules' ? t.modeRules : t.modeLlm}
       </p>
     </div>
   );
@@ -127,9 +129,10 @@ function Statements({ items }: { items: CitedStatement[] }) {
 }
 
 function Ids({ ids }: { ids: string[] }) {
+  const { t } = useI18n();
   if (ids.length === 0) return null;
   return (
-    <span className="ids" aria-label="Sources">
+    <span className="ids" aria-label={t.sources}>
       {ids.map((id) => <span key={id} className="mono id-chip">{id}</span>)}
     </span>
   );

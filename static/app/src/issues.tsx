@@ -1,6 +1,7 @@
 import { router } from '@forge/bridge';
 import { useState } from 'react';
 import { call, errorMessage, useAsync, type IssueLinkView, type IssueLinksData, type JiraConfig, type RiskEvent } from './api';
+import { useI18n } from './i18n';
 
 /** Live issue links keyed by risk ID; `reload` after creating an issue. */
 export function useIssueLinks(dataVersion: number) {
@@ -10,24 +11,23 @@ export function useIssueLinks(dataVersion: number) {
   return { state, data, byRisk };
 }
 
-const CATEGORY_LABEL = { new: 'To do', indeterminate: 'In progress', done: 'Done', unknown: 'Unknown' } as const;
-
 export function IssueKeyLink({ link }: { link: IssueLinkView }) {
+  const { t } = useI18n();
   const open = () => void router.open(`/browse/${link.issueKey}`).catch(() => undefined);
   return (
     <span className="issue-link">
-      <button type="button" className="link mono" onClick={open} title="Open in Jira (new tab)">
+      <button type="button" className="link mono" onClick={open} title={t.openInJira}>
         {link.issueKey}
       </button>
       {link.status ? (
-        <span className={`badge status-cat-${link.status.category}`} title={CATEGORY_LABEL[link.status.category]}>
+        <span className={`badge status-cat-${link.status.category}`} title={t.issueCategory[link.status.category]}>
           {link.status.statusName}
         </span>
       ) : Date.now() - new Date(link.createdAt).getTime() < 2 * 60_000 ? (
         // Jira search indexes new issues with a short delay.
-        <span className="muted small">just created — status appears in a moment</span>
+        <span className="muted small">{t.justCreated}</span>
       ) : (
-        <span className="muted small">status unavailable (deleted or no access)</span>
+        <span className="muted small">{t.statusUnavailable}</span>
       )}
     </span>
   );
@@ -41,9 +41,10 @@ export function IssueAction({ risk, link, config, onChanged }: { risk: RiskEvent
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const { t } = useI18n();
 
   if (link) return <IssueKeyLink link={link} />;
-  if (!config) return <span className="muted small">Jira project not configured (Import &amp; Settings)</span>;
+  if (!config) return <span className="muted small">{t.jiraNotConfigured}</span>;
 
   const create = async () => {
     setBusy(true);
@@ -51,7 +52,7 @@ export function IssueAction({ risk, link, config, onChanged }: { risk: RiskEvent
     try {
       const out = await call('createIssueForRisk', { riskId: risk.id });
       if (out.ok) {
-        setMessage({ tone: 'ok', text: `Created ${out.link.issueKey}` });
+        setMessage({ tone: 'ok', text: t.createdIssue(out.link.issueKey) });
         onChanged();
       } else {
         setMessage({ tone: 'error', text: out.message });
@@ -69,18 +70,18 @@ export function IssueAction({ risk, link, config, onChanged }: { risk: RiskEvent
     <span className="issue-action">
       {!confirming ? (
         <button type="button" className="btn" onClick={() => setConfirming(true)} disabled={busy}>
-          Create Jira issue
+          {t.createIssue}
         </button>
       ) : (
-        <span className="confirm" role="group" aria-label="Confirm issue creation">
+        <span className="confirm" role="group" aria-label={t.confirmIssue}>
           <span className="small">
-            Create a {config.issueTypeName} in {config.projectName} ({config.projectKey})?
+            {t.createIssueIn(config.issueTypeName, config.projectName, config.projectKey)}
           </span>
           <button type="button" className="btn btn-primary" onClick={create} disabled={busy}>
-            {busy ? 'Creating…' : 'Create'}
+            {busy ? t.creating : t.create}
           </button>
           <button type="button" className="btn" onClick={() => setConfirming(false)} disabled={busy}>
-            Cancel
+            {t.cancel}
           </button>
         </span>
       )}

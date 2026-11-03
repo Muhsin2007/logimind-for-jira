@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { call, errorMessage, useAsync, type ImportKind, type ImportOutcome, type MappingProposal } from '../api';
 import { ErrorState, Loading, Panel } from '../components';
-import { fmtDateTime } from '../format';
 import type { NavProps } from '../App';
+import { useI18n } from '../i18n';
 import { ColumnMapping } from './ColumnMapping';
 import { JiraSettings } from './JiraSettings';
 
@@ -36,6 +36,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [pending, setPending] = useState<PendingMapping[]>([]);
   const [pasted, setPasted] = useState('');
+  const { t, fmt } = useI18n();
   // While a mapping waits for confirmation, new uploads are blocked so nothing is confirmed against the wrong file.
   const locked = busy !== null || !canManage || pending.length > 0;
 
@@ -60,7 +61,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
       for (const { filename, read } of items) {
         const content = await read();
         if (content === null || content.length > MAX_BYTES) {
-          results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: 'File is larger than 1 MB' }] } });
+          results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: t.fileTooLarge }] } });
           continue;
         }
         try {
@@ -105,18 +106,13 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
 
   return (
     <div className="stack">
-      <Panel title="Import CSV">
-        <p>
-          Upload a <strong>shipments</strong> or <strong>inventory</strong> CSV (UTF-8, comma, semicolon or tab separated as exported by Excel,
-          max 1 MB). The file type is detected from its header; if your supplier uses other column names, AI proposes a column mapping for
-          you to confirm. Each import <strong>replaces</strong> the current dataset of that type; rows that fail validation are rejected and listed
-          below, never silently used.
-        </p>
+      <Panel title={t.importTitle}>
+        <p>{t.importIntro}</p>
         {access.status === 'ready' && !canManage && (
-          <p className="notice" role="note">Only Jira administrators can import, load or delete data. You can view everything else.</p>
+          <p className="notice" role="note">{t.adminOnly}</p>
         )}
         <div className="row">
-          <label htmlFor="csv-files" className="h4">CSV files</label>
+          <label htmlFor="csv-files" className="h4">{t.csvFiles}</label>
           <input
             id="csv-files"
             ref={fileInput}
@@ -126,12 +122,12 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
             disabled={locked}
             onChange={(e) => upload(e.target.files)}
           />
-          {busy === 'upload' && <span className="muted">Importing… (unrecognised columns are mapped with AI)</span>}
-          {pending.length > 0 && busy === null && <span className="muted">Confirm or cancel the column mapping below first.</span>}
+          {busy === 'upload' && <span className="muted">{t.importingAi}</span>}
+          {pending.length > 0 && busy === null && <span className="muted">{t.confirmMappingFirst}</span>}
         </div>
         <details>
-          <summary>Or paste rows copied from Excel</summary>
-          <label htmlFor="csv-paste" className="muted small">Copy the cells including the header row from Excel or Google Sheets and paste them here.</label>
+          <summary>{t.pasteSummary}</summary>
+          <label htmlFor="csv-paste" className="muted small">{t.pasteHelp}</label>
           <textarea
             id="csv-paste"
             className="input paste-box"
@@ -143,7 +139,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           />
           <div className="row">
             <button type="button" className="btn" disabled={locked || !pasted.trim()} onClick={importPasted}>
-              Import pasted rows
+              {t.importPasted}
             </button>
           </div>
         </details>
@@ -166,32 +162,32 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
       </Panel>
 
       <div className="grid-2">
-        <Panel title="File formats">
-          <h3 className="h4">Shipments</h3>
+        <Panel title={t.fileFormats}>
+          <h3 className="h4">{t.formatShipments}</h3>
           <p className="mono small wrap">shipment_id*, order_id, supplier*, sku*, product_name, qty*, planned_arrival*, eta, actual_arrival, status*, warehouse*, carrier, tracking_ref</p>
-          <h3 className="h4">Inventory</h3>
+          <h3 className="h4">{t.formatInventory}</h3>
           <p className="mono small wrap">sku*, product_name, warehouse*, on_hand*, reserved, inbound_qty, safety_stock*, unit_cost, updated_at</p>
-          <p className="muted small">* required. Dates as YYYY-MM-DD. Status: planned, confirmed, in_transit, customs, delivered, cancelled.</p>
+          <p className="muted small">{t.formatNote}</p>
         </Panel>
 
-        <Panel title="Demo and data management">
-          <p>Load a synthetic dataset (30 shipments, 12 stock positions) with dates relative to today. It replaces current data.</p>
-          <p className="muted small">Imports are limited to 2,000 rows per file.</p>
+        <Panel title={t.demoTitle}>
+          <p>{t.demoText}</p>
+          <p className="muted small">{t.rowLimit}</p>
           <div className="row">
             <button type="button" className="btn btn-primary" disabled={busy !== null || !canManage} onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}>
-              {busy === 'demo' ? 'Loading…' : 'Load demo data'}
+              {busy === 'demo' ? t.loading : t.loadDemo}
             </button>
             {!confirmClear ? (
               <button type="button" className="btn btn-danger-subtle" disabled={busy !== null || !canManage} onClick={() => setConfirmClear(true)}>
-                Delete all data…
+                {t.deleteAll}
               </button>
             ) : (
-              <span className="confirm" role="group" aria-label="Confirm delete">
-                <span>Delete all shipments, inventory, import history and risk-to-issue links? Jira issues are not deleted.</span>
+              <span className="confirm" role="group" aria-label={t.confirmDelete}>
+                <span>{t.deleteQuestion}</span>
                 <button type="button" className="btn btn-danger" disabled={busy !== null} onClick={() => run('clear', async () => { await call('clearData'); setOutcomes([]); setConfirmClear(false); })}>
-                  {busy === 'clear' ? 'Deleting…' : 'Delete'}
+                  {busy === 'clear' ? t.deleting : t.delete}
                 </button>
-                <button type="button" className="btn" onClick={() => setConfirmClear(false)}>Cancel</button>
+                <button type="button" className="btn" onClick={() => setConfirmClear(false)}>{t.cancel}</button>
               </span>
             )}
           </div>
@@ -200,20 +196,20 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
 
       {access.status === 'ready' && <JiraSettings canManage={canManage} dataVersion={dataVersion} onDataChanged={onDataChanged} />}
 
-      <Panel title="Import history">
+      <Panel title={t.importHistory}>
         {history.status === 'loading' && <Loading />}
         {history.status === 'error' && <ErrorState message={history.message} onRetry={history.reload} />}
         {history.status === 'ready' && (history.data.length === 0 ? (
-          <p className="muted">No imports yet.</p>
+          <p className="muted">{t.noImportsYet}</p>
         ) : (
           <table className="table compact">
             <thead>
-              <tr><th>File</th><th>Type</th><th>Imported</th><th className="num">Rows</th><th className="num">Valid</th><th className="num">Rejected</th></tr>
+              <tr><th>{t.colFile}</th><th>{t.colType}</th><th>{t.colImported}</th><th className="num">{t.colRows}</th><th className="num">{t.colValid}</th><th className="num">{t.colRejected}</th></tr>
             </thead>
             <tbody>
               {history.data.map((b) => (
                 <tr key={b.id}>
-                  <td>{b.filename}</td><td>{b.kind}</td><td>{fmtDateTime(b.importedAt)}</td>
+                  <td>{b.filename}</td><td>{t.importKind[b.kind]}</td><td>{fmt.dateTime(b.importedAt)}</td>
                   <td className="num">{b.rowsTotal}</td><td className="num">{b.rowsValid}</td>
                   <td className="num">{b.rowsRejected > 0 ? <span className="text-danger">{b.rowsRejected}</span> : 0}</td>
                 </tr>
@@ -227,22 +223,23 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
 }
 
 function ImportResult({ filename, outcome }: { filename: string; outcome: ImportOutcome }) {
+  const { t } = useI18n();
   const errors = outcome.ok ? outcome.batch.errors : outcome.errors;
   return (
     <div className={`result ${outcome.ok && outcome.batch.rowsRejected === 0 ? 'result-ok' : 'result-warn'}`}>
       <strong>{filename}: </strong>
       {outcome.ok ? (
         <>
-          {outcome.batch.rowsValid} of {outcome.batch.rowsTotal} {outcome.batch.kind} rows imported
-          {outcome.batch.rowsRejected > 0 && `, ${outcome.batch.rowsRejected} rejected`}.
-          {!outcome.replaced && ' No valid rows — existing data was kept.'}
+          {t.importedRows(outcome.batch.rowsValid, outcome.batch.rowsTotal, t.importKind[outcome.batch.kind])}
+          {outcome.batch.rowsRejected > 0 && t.rejectedRows(outcome.batch.rowsRejected)}.
+          {!outcome.replaced && t.keptExisting}
         </>
       ) : (
-        'File was not imported.'
+        t.notImported
       )}
       {errors.length > 0 && (
         <table className="table compact errors">
-          <thead><tr><th className="num">Line</th><th>Field</th><th>Problem</th></tr></thead>
+          <thead><tr><th className="num">{t.colLine}</th><th>{t.colField}</th><th>{t.colProblem}</th></tr></thead>
           <tbody>
             {errors.map((e, i) => (
               <tr key={`${e.line}-${e.field}-${i}`}>

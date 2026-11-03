@@ -20,6 +20,9 @@ import type {
 
 export type { FieldSpec, ImportBatch, ImportKind, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
 
+/** UI language chosen by the person; English is the default. */
+export type UiLocale = 'en' | 'ru';
+
 export interface DashboardData {
   today: IsoDate;
   hasData: boolean;
@@ -166,5 +169,5 @@ export interface ResolverApi {
   listJiraIssueTypes: { payload: { projectKey: string }; result: { id: string; name: string }[] };
   saveJiraConfig: { payload: { projectKey: string; issueTypeId: string }; result: JiraConfig };
   getIssueContext: { payload: void; result: IssueContextData };
-  askCopilot: { payload: { question: string }; result: CopilotAnswer };
+  askCopilot: { payload: { question: string; locale?: UiLocale }; result: CopilotAnswer };
 }

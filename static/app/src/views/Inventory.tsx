@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { call, useAsync } from '../api';
 import { EmptyState, ErrorState, Loading, SeverityBadge } from '../components';
-import { fmtMoney, fmtNumber } from '../format';
 import type { NavProps } from '../App';
+import { useI18n } from '../i18n';
 
 export function Inventory({ dataVersion }: NavProps) {
   const state = useAsync(() => call('listInventory'), [dataVersion]);
   const [query, setQuery] = useState('');
   const [belowOnly, setBelowOnly] = useState(false);
+  const { t, fmt } = useI18n();
 
   const rows = useMemo(() => {
     if (state.status !== 'ready') return [];
@@ -19,10 +20,10 @@ export function Inventory({ dataVersion }: NavProps) {
     );
   }, [state, query, belowOnly]);
 
-  if (state.status === 'loading') return <Loading label="Loading inventory…" />;
+  if (state.status === 'loading') return <Loading label={t.loadingInventory} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={state.reload} />;
   if (state.data.items.length === 0) {
-    return <EmptyState title="No inventory imported">Import an inventory CSV from Import &amp; Settings.</EmptyState>;
+    return <EmptyState title={t.noInventoryTitle}>{t.noInventoryText}</EmptyState>;
   }
 
   return (
@@ -31,28 +32,26 @@ export function Inventory({ dataVersion }: NavProps) {
         <input
           type="search"
           className="input"
-          placeholder="Search SKU, product, warehouse…"
-          aria-label="Search inventory"
+          placeholder={t.searchInventory}
+          aria-label={t.searchInventoryLabel}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <label className="checkbox">
-          <input type="checkbox" checked={belowOnly} onChange={(e) => setBelowOnly(e.target.checked)} /> Below safety stock only
+          <input type="checkbox" checked={belowOnly} onChange={(e) => setBelowOnly(e.target.checked)} /> {t.belowSafetyOnly}
         </label>
-        <span className="muted small">{rows.length} of {state.data.items.length}</span>
+        <span className="muted small">{t.ofTotal(rows.length, state.data.items.length)}</span>
       </div>
-      <p className="muted small">
-        Available = on hand − reserved. Projected adds open, on-time inbound shipments due within 7 days.
-      </p>
+      <p className="muted small">{t.inventoryNote}</p>
 
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th>SKU</th><th>Product</th><th>Warehouse</th>
-              <th className="num">On hand</th><th className="num">Reserved</th><th className="num">Available</th>
-              <th className="num">Inbound 7d</th><th className="num">Projected</th><th className="num">Safety</th>
-              <th>Coverage</th><th className="num">Unit cost</th><th>Risk</th>
+              <th>{t.colSku}</th><th>{t.colProduct}</th><th>{t.colWarehouse}</th>
+              <th className="num">{t.colOnHand}</th><th className="num">{t.colReserved}</th><th className="num">{t.colAvailable}</th>
+              <th className="num">{t.colInbound7}</th><th className="num">{t.colProjected}</th><th className="num">{t.colSafety}</th>
+              <th>{t.colCoverage}</th><th className="num">{t.colUnitCost}</th><th>{t.colRisk}</th>
             </tr>
           </thead>
           <tbody>
@@ -63,12 +62,12 @@ export function Inventory({ dataVersion }: NavProps) {
                   <td className="mono">{i.sku}</td>
                   <td>{i.productName ?? '—'}</td>
                   <td>{i.warehouse}</td>
-                  <td className="num">{fmtNumber(i.onHand)}</td>
-                  <td className="num">{fmtNumber(i.reserved)}</td>
-                  <td className="num">{fmtNumber(i.available)}</td>
-                  <td className="num" title={i.inboundShipmentIds.join(', ') || undefined}>{fmtNumber(i.inboundSoon)}</td>
-                  <td className="num"><strong>{fmtNumber(i.projected)}</strong></td>
-                  <td className="num">{fmtNumber(i.safetyStock)}</td>
+                  <td className="num">{fmt.number(i.onHand)}</td>
+                  <td className="num">{fmt.number(i.reserved)}</td>
+                  <td className="num">{fmt.number(i.available)}</td>
+                  <td className="num" title={i.inboundShipmentIds.join(', ') || undefined}>{fmt.number(i.inboundSoon)}</td>
+                  <td className="num"><strong>{fmt.number(i.projected)}</strong></td>
+                  <td className="num">{fmt.number(i.safetyStock)}</td>
                   <td className="nowrap">
                     <span
                       className="meter"
@@ -76,21 +75,21 @@ export function Inventory({ dataVersion }: NavProps) {
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={Math.round(Math.min(coverage, 1) * 100)}
-                      aria-valuetext={`${Math.round(coverage * 100)}% of safety stock`}
-                      aria-label="Coverage of safety stock"
+                      aria-valuetext={t.coverageText(Math.round(coverage * 100))}
+                      aria-label={t.coverageLabel}
                     >
                       <span className={`meter-fill${coverage < 1 ? ' meter-low' : ''}`} style={{ width: `${Math.min(coverage, 1) * 100}%` }} />
                     </span>{' '}
                     <span className="small" aria-hidden="true">{Math.round(coverage * 100)}%</span>
                   </td>
-                  <td className="num">{i.unitCost === null ? '—' : fmtMoney(i.unitCost)}</td>
+                  <td className="num">{i.unitCost === null ? '—' : fmt.money(i.unitCost)}</td>
                   <td>{i.risk ? <SeverityBadge severity={i.risk.severity} /> : <span className="muted">—</span>}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {rows.length === 0 && <p className="muted pad">No inventory rows match these filters.</p>}
+        {rows.length === 0 && <p className="muted pad">{t.noInventoryMatch}</p>}
       </div>
     </div>
   );

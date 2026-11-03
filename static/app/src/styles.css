@@ -77,7 +77,12 @@ p { margin: 4px 0 8px; }
 :focus-visible { outline: 2px solid var(--border-focused); outline-offset: 2px; }
 
 .app { padding: 16px 24px 48px; max-width: 1400px; }
-.app-head { margin-bottom: 12px; }
+.app-head { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.app-head p { margin: 0; }
+.lang-switch { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.lang-btn { border-radius: 0; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+.lang-active { background: var(--brand); color: var(--on-bold); }
+.lang-btn.lang-active:hover:not(:disabled) { background: var(--brand-hover); color: var(--on-bold); }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .row { display: flex; gap: var(--space); align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }

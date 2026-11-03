@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { call, errorMessage, useAsync, type JiraConfig } from '../api';
 import { ErrorState, Loading, Panel } from '../components';
-import { fmtDateTime } from '../format';
+import { useI18n } from '../i18n';
 
 /** Admin-only: where "Create Jira issue" puts new issues. */
 export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canManage: boolean; dataVersion: number; onDataChanged: () => void }) {
@@ -11,6 +11,7 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
   const [issueTypeId, setIssueTypeId] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const { t, fmt } = useI18n();
   const issueTypes = useAsync(() => (projectKey ? call('listJiraIssueTypes', { projectKey }) : Promise.resolve([])), [projectKey]);
 
   const config: JiraConfig | null = current.status === 'ready' ? current.data.config : null;
@@ -39,7 +40,7 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
     setMessage(null);
     try {
       const saved = await call('saveJiraConfig', { projectKey, issueTypeId });
-      setMessage({ tone: 'ok', text: `Saved: new issues go to ${saved.projectName} as ${saved.issueTypeName}.` });
+      setMessage({ tone: 'ok', text: t.savedConfig(saved.projectName, saved.issueTypeName) });
       onDataChanged();
     } catch (err) {
       setMessage({ tone: 'error', text: errorMessage(err) });
@@ -49,40 +50,40 @@ export function JiraSettings({ canManage, dataVersion, onDataChanged }: { canMan
   };
 
   return (
-    <Panel title="Jira integration">
+    <Panel title={t.jiraIntegration}>
       {current.status === 'loading' && <Loading />}
       {current.status === 'error' && <ErrorState message={current.message} onRetry={current.reload} />}
       {current.status === 'ready' && (
         <p>
           {config ? (
             <>
-              Risk issues are created in <strong>{config.projectName} ({config.projectKey})</strong> as <strong>{config.issueTypeName}</strong>
-              <span className="muted small"> · updated {fmtDateTime(config.updatedAt)}</span>
+              <strong>{t.issuesCreatedIn(config.projectName, config.projectKey, config.issueTypeName)}</strong>
+              <span className="muted small"> · {t.updatedAt(fmt.dateTime(config.updatedAt))}</span>
             </>
           ) : (
-            'No Jira project chosen yet, so "Create Jira issue" is disabled.'
+            t.noProjectChosen
           )}
         </p>
       )}
-      <p className="muted small">Issues are created as the user who clicks the button, so Jira's project permissions apply.</p>
+      <p className="muted small">{t.createdAsUser}</p>
 
       {canManage && (
         <div className="row">
           <label className="checkbox">
-            Project
+            {t.project}
             <select className="input" value={projectKey} onChange={(e) => chooseProject(e.target.value)} disabled={projects.status !== 'ready'}>
-              <option value="">Choose a project…</option>
+              <option value="">{t.chooseProject}</option>
               {projects.status === 'ready' && projects.data.map((p) => <option key={p.key} value={p.key}>{p.name} ({p.key})</option>)}
             </select>
           </label>
           <label className="checkbox">
-            Issue type
+            {t.issueType}
             <select className="input" value={issueTypeId} onChange={(e) => setIssueTypeId(e.target.value)} disabled={!projectKey || issueTypes.status !== 'ready'}>
               {issueTypes.status === 'ready' && issueTypes.data.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </label>
           <button type="button" className="btn btn-primary" onClick={save} disabled={saving || !projectKey || !issueTypeId}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t.saving : t.save}
           </button>
         </div>
       )}

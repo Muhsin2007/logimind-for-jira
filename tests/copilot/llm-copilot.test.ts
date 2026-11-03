@@ -228,4 +228,30 @@ describe('LlmCopilot', () => {
     const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), { ...reply(call('submit_answer', GOOD_ANSWER)), finishReason: 'length' });
     expect((await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?')).mode).toBe('rules');
   });
+
+  it('asks for Russian when the UI is in Russian and still verifies every value', async () => {
+    const ru = {
+      ...GOOD_ANSWER,
+      facts: [{ text: 'SHP-1004 (150 шт. SKU-04) на таможне, плановая дата 2026-10-24, опоздание 9 дней.', ids: ['SHP-1004'] }],
+      recommendations: [],
+      unknowns: [],
+    };
+    const { llm, requests } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', ru)));
+    const a = await new LlmCopilot(demoToolbox(), llm).ask('Почему SHP-1004 проблема?', 'ru');
+    expect(a.mode).toBe('llm');
+    expect(a.facts[0].text).toContain('на таможне');
+    expect(requests[0].messages[0].content).toContain('in Russian');
+
+    // A Russian answer with an invented number is rejected like an English one.
+    const bad = { ...ru, facts: [{ text: 'SHP-1004 опаздывает на 12 дней.', ids: ['SHP-1004'] }] };
+    const second = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
+    expect((await new LlmCopilot(demoToolbox(), second.llm).ask('SHP-1004?', 'ru')).mode).toBe('rules');
+  });
+
+  it('answers in English by default', async () => {
+    const { llm, requests } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', GOOD_ANSWER)));
+    await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?');
+    expect(requests[0].messages[0].content).toContain('in English');
+    expect(requests[0].messages[0].content).not.toContain('Russian');
+  });
 });

@@ -50,9 +50,11 @@ resolver.define('listImports', () => logistics.listImports());
 resolver.define('listIssueLinks', () => issues.listLinks());
 // The Forge LLM answers through the read-only toolbox; unverifiable answers or an unavailable
 // model fall back to the rule-based copilot. A fresh toolbox per request reads the data once.
-resolver.define('askCopilot', ({ payload, context }) =>
-  new LlmCopilot(new ServiceToolbox(logistics, issues), llm, { accountId: accountOf(context) }).ask(requireString(payload, 'question', MAX_QUESTION)),
-);
+// The locale only selects the answer language; anything but a known locale means English.
+resolver.define('askCopilot', ({ payload, context }) => {
+  const locale = (payload as Record<string, unknown> | null)?.locale === 'ru' ? 'ru' : 'en';
+  return new LlmCopilot(new ServiceToolbox(logistics, issues), llm, { accountId: accountOf(context) }).ask(requireString(payload, 'question', MAX_QUESTION), locale);
+});
 
 // Issue creation runs as the user, so Jira's own project permissions decide who may create.
 resolver.define('createIssueForRisk', ({ payload, context }) =>

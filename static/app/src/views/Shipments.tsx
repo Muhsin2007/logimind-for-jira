@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import { call, useAsync, type Shipment } from '../api';
 import { EmptyState, ErrorState, Loading, SeverityBadge, StatusBadge } from '../components';
-import { fmtDate, fmtNumber, STATUS_LABEL } from '../format';
 import type { NavProps } from '../App';
+import { useI18n } from '../i18n';
 
 export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
   const state = useAsync(() => call('listShipments'), [dataVersion]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | Shipment['status']>('all');
   const [atRiskOnly, setAtRiskOnly] = useState(false);
+  const { t, fmt } = useI18n();
 
   const rows = useMemo(() => {
     if (state.status !== 'ready') return [];
@@ -21,10 +22,10 @@ export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
     );
   }, [state, query, status, atRiskOnly]);
 
-  if (state.status === 'loading') return <Loading label="Loading shipments…" />;
+  if (state.status === 'loading') return <Loading label={t.loadingShipments} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={state.reload} />;
   if (state.data.shipments.length === 0) {
-    return <EmptyState title="No shipments imported">Import a shipments CSV from Import &amp; Settings.</EmptyState>;
+    return <EmptyState title={t.noShipmentsTitle}>{t.noShipmentsText}</EmptyState>;
   }
 
   return (
@@ -33,29 +34,29 @@ export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
         <input
           type="search"
           className="input"
-          placeholder="Search ID, supplier, SKU, warehouse…"
-          aria-label="Search shipments"
+          placeholder={t.searchShipments}
+          aria-label={t.searchShipmentsLabel}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select className="input" aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-          <option value="all">All statuses</option>
-          {Object.entries(STATUS_LABEL).map(([value, label]) => (
+        <select className="input" aria-label={t.filterStatus} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+          <option value="all">{t.allStatuses}</option>
+          {Object.entries(t.status).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
         <label className="checkbox">
-          <input type="checkbox" checked={atRiskOnly} onChange={(e) => setAtRiskOnly(e.target.checked)} /> At risk only
+          <input type="checkbox" checked={atRiskOnly} onChange={(e) => setAtRiskOnly(e.target.checked)} /> {t.atRiskOnly}
         </label>
-        <span className="muted small">{rows.length} of {state.data.shipments.length}</span>
+        <span className="muted small">{t.ofTotal(rows.length, state.data.shipments.length)}</span>
       </div>
 
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th>Shipment</th><th>Supplier</th><th>SKU</th><th className="num">Qty</th>
-              <th>Planned</th><th>ETA</th><th>Status</th><th>Warehouse</th><th>Risk</th>
+              <th>{t.colShipment}</th><th>{t.colSupplier}</th><th>{t.colSku}</th><th className="num">{t.colQty}</th>
+              <th>{t.colPlanned}</th><th>{t.colEta}</th><th>{t.colStatus}</th><th>{t.colWarehouse}</th><th>{t.colRisk}</th>
             </tr>
           </thead>
           <tbody>
@@ -76,9 +77,9 @@ export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
                 </td>
                 <td>{s.supplier}</td>
                 <td className="mono">{s.sku}</td>
-                <td className="num">{fmtNumber(s.qty)}</td>
-                <td>{fmtDate(s.plannedArrival)}</td>
-                <td>{s.actualArrival ? <span className="muted">Arrived {fmtDate(s.actualArrival)}</span> : fmtDate(s.eta)}</td>
+                <td className="num">{fmt.number(s.qty)}</td>
+                <td>{fmt.date(s.plannedArrival)}</td>
+                <td>{s.actualArrival ? <span className="muted">{t.arrivedOn(fmt.date(s.actualArrival))}</span> : fmt.date(s.eta)}</td>
                 <td><StatusBadge status={s.status} /></td>
                 <td>{s.warehouse}</td>
                 <td>{s.topSeverity ? <SeverityBadge severity={s.topSeverity} /> : <span className="muted">—</span>}</td>
@@ -86,7 +87,7 @@ export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <p className="muted pad">No shipments match these filters.</p>}
+        {rows.length === 0 && <p className="muted pad">{t.noShipmentsMatch}</p>}
       </div>
     </div>
   );

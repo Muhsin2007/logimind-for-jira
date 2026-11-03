@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import type { UiLocale } from './api';
+import { LOCALE_NAMES, useI18n } from './i18n';
 import { Copilot } from './views/Copilot';
 import { Dashboard } from './views/Dashboard';
 import { ImportSettings } from './views/ImportSettings';
@@ -17,14 +19,7 @@ export interface NavProps {
   onDataChanged: () => void;
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'shipments', label: 'Shipments' },
-  { id: 'inventory', label: 'Inventory' },
-  { id: 'risks', label: 'Risk Center' },
-  { id: 'copilot', label: 'Copilot' },
-  { id: 'import', label: 'Import & Settings' },
-];
+const TABS: Tab[] = ['dashboard', 'shipments', 'inventory', 'risks', 'copilot', 'import'];
 
 const VIEWS: Record<Tab, (props: NavProps) => JSX.Element> = {
   dashboard: Dashboard,
@@ -62,33 +57,37 @@ export function App() {
     };
     if (!(e.key in target)) return;
     e.preventDefault();
-    const next = TABS[target[e.key]].id;
+    const next = TABS[target[e.key]];
     setTab(next);
     document.getElementById(`tab-${next}`)?.focus();
   };
 
   const View = VIEWS[tab];
+  const { t } = useI18n();
 
   return (
     <div className="app">
-      {/* Jira already renders the page title, so the app only adds a subtitle. */}
-      <p className="muted app-head">Logistics risk, shipments and stock — inside Jira.</p>
+      <div className="app-head">
+        {/* Jira already renders the page title, so the app only adds a subtitle. */}
+        <p className="muted">{t.appSubtitle}</p>
+        <LanguageSwitch />
+      </div>
 
-      <div className="tabs" role="tablist" aria-label="LogiMind sections">
-        {TABS.map((t, i) => (
+      <div className="tabs" role="tablist" aria-label={t.sections}>
+        {TABS.map((id, i) => (
           <button
-            key={t.id}
-            id={`tab-${t.id}`}
+            key={id}
+            id={`tab-${id}`}
             type="button"
             role="tab"
-            aria-selected={tab === t.id}
+            aria-selected={tab === id}
             aria-controls="tabpanel"
-            tabIndex={tab === t.id ? 0 : -1}
-            className={`tab${tab === t.id ? ' tab-active' : ''}`}
-            onClick={() => setTab(t.id)}
+            tabIndex={tab === id ? 0 : -1}
+            className={`tab${tab === id ? ' tab-active' : ''}`}
+            onClick={() => setTab(id)}
             onKeyDown={(e) => onTabKey(e, i)}
           >
-            {t.label}
+            {t.tabs[id]}
           </button>
         ))}
       </div>
@@ -98,6 +97,28 @@ export function App() {
       </div>
 
       {shipmentId && <ShipmentDrawer id={shipmentId} onClose={closeDrawer} />}
+    </div>
+  );
+}
+
+/** Compact EN / RU switch; the choice is saved per person in this browser. */
+function LanguageSwitch() {
+  const { locale, setLocale, t } = useI18n();
+  return (
+    <div className="lang-switch" role="group" aria-label={t.language}>
+      {(Object.keys(LOCALE_NAMES) as UiLocale[]).map((l) => (
+        <button
+          key={l}
+          type="button"
+          lang={l}
+          className={`btn btn-subtle lang-btn${locale === l ? ' lang-active' : ''}`}
+          aria-pressed={locale === l}
+          title={LOCALE_NAMES[l]}
+          onClick={() => setLocale(l)}
+        >
+          {l.toUpperCase()}
+        </button>
+      ))}
     </div>
   );
 }

@@ -1,20 +1,22 @@
 import { useId, type ReactNode } from 'react';
 import type { Severity, Shipment } from './api';
-import { SEVERITY_LABEL, STATUS_LABEL } from './format';
+import { useI18n } from './i18n';
 
 /** Severity is status, not identity: always an icon glyph + label, never colour alone. */
 const SEVERITY_GLYPH: Record<Severity, string> = { critical: '▲', high: '◆', medium: '●', low: '○' };
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
+  const { t } = useI18n();
   return (
     <span className={`badge sev-${severity}`}>
-      <span aria-hidden="true">{SEVERITY_GLYPH[severity]}</span> {SEVERITY_LABEL[severity]}
+      <span aria-hidden="true">{SEVERITY_GLYPH[severity]}</span> {t.severity[severity]}
     </span>
   );
 }
 
 export function StatusBadge({ status }: { status: Shipment['status'] }) {
-  return <span className={`badge status status-${status}`}>{STATUS_LABEL[status]}</span>;
+  const { t } = useI18n();
+  return <span className={`badge status status-${status}`}>{t.status[status]}</span>;
 }
 
 export function StatTile({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: 'danger' | 'warning' }) {
@@ -65,21 +67,23 @@ export function Panel({ title, actions, children }: { title: string; actions?: R
   );
 }
 
-export function Loading({ label = 'Loading…' }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const { t } = useI18n();
   return (
     <div className="state" role="status">
-      <span className="spinner" aria-hidden="true" /> {label}
+      <span className="spinner" aria-hidden="true" /> {label ?? t.loading}
     </div>
   );
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="state state-error" role="alert">
-      <strong>Something went wrong.</strong> {message}
+      <strong>{t.somethingWrong}</strong> {message}
       {onRetry && (
         <button type="button" className="btn" onClick={onRetry}>
-          Retry
+          {t.retry}
         </button>
       )}
     </div>
