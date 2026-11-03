@@ -38,7 +38,7 @@ export function Copilot(_props: NavProps) {
       <p className="notice" role="note">
         <strong>AI mode.</strong> Answers are written by Claude (Atlassian-hosted Forge LLM, no external provider), which can only call
         LogiMind's read-only tools. Every ID, number and date in an answer is checked against your data; if the AI is unavailable or an
-        answer cannot be verified, the rule-based answer is shown instead.
+        answer cannot be verified, the rule-based answer is shown instead. The AI's wording and reasoning are not checked: review its suggestions.
       </p>
 
       <form className="copilot-form" onSubmit={submit}>

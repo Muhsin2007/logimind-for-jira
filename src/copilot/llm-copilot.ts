@@ -7,7 +7,7 @@ import type { CopilotToolbox } from './tools';
 
 /** Model calls per question (tool rounds plus the final answer). Bounds latency and cost. */
 export const MAX_LLM_CALLS = 4;
-const MAX_TOKENS = 700;
+const MAX_TOKENS = 800;
 const MAX_TOOL_CALLS_PER_ROUND = 4;
 const MAX_TOOL_RESULT = 8000;
 const MAX_STATEMENT = 400;
@@ -82,7 +82,7 @@ function systemPrompt(today: string): string {
     'Answer the question using ONLY data returned by the tools: look the data up first, then call submit_answer once.',
     'Rules:',
     '- Every fact and recommendation lists in ids the exact IDs from tool results that support it (shipment IDs, SKUs, risk IDs, SKU@warehouse, Jira issue keys).',
-    '- Never invent IDs, numbers or dates. Copy numbers and dates exactly as the tools return them; do not add, subtract or count.',
+    '- Never invent IDs, numbers or dates. Copy numbers and dates exactly as the tools return them. Never calculate: no differences, sums, counts or percentages (use returned fields such as shortfall or projected instead).',
     '- If something is missing or not found, put it in unknowns instead of guessing.',
     '- Risks come from deterministic rules; they are not predictions.',
     '- You are read-only: you cannot create, change or delete anything, and never claim you did.',
@@ -112,7 +112,7 @@ export class LlmCopilot {
       return await this.askModel(question);
     } catch (err) {
       const reason = err instanceof LlmUnavailableError || err instanceof AnswerRejected ? err.message : 'the AI answer could not be used';
-      if (!(err instanceof LlmUnavailableError)) console.warn('LogiMind AI copilot fell back to rules', { reason, error: err instanceof Error ? err.message : String(err) });
+      if (!(err instanceof LlmUnavailableError)) console.warn('LogiMind AI copilot fell back to rules', { reason, detail: err instanceof AnswerRejected ? err.detail : err instanceof Error ? err.message : String(err) });
       const rules = await this.fallback.ask(question);
       return { ...rules, fallbackReason: `AI answer unavailable (${reason}). Showing the rule-based answer.` };
     }
@@ -126,6 +126,7 @@ export class LlmCopilot {
       { role: 'user', content: `Question from a Jira user:\n${question}` },
     ];
 
+    let corrected = false;
     for (let round = 0; round < MAX_LLM_CALLS; round++) {
       const last = round === MAX_LLM_CALLS - 1;
       const reply = await this.llm.chat({
@@ -137,7 +138,22 @@ export class LlmCopilot {
       });
       const submit = reply.toolCalls.find((c) => c.function.name === SUBMIT.function.name);
       if (submit) {
-        const body = evidence.verify(toolArguments(submit));
+        let body;
+        try {
+          body = evidence.verify(toolArguments(submit));
+        } catch (err) {
+          // One correction round: the model is told which value it could not support, never more.
+          if (!(err instanceof AnswerRejected) || last || corrected) throw err;
+          corrected = true;
+          messages.push({ role: 'assistant', content: reply.content.trim() || 'Submitting the answer.', tool_calls: reply.toolCalls });
+          for (const c of reply.toolCalls) {
+            const content = c === submit
+              ? JSON.stringify({ ok: false, error: `Answer rejected: ${err.detail ?? 'a value'} does not appear in the tool results. Submit again using only IDs, numbers and dates exactly as returned; do not calculate.` })
+              : JSON.stringify({ ok: false, error: 'Not run: an answer was submitted in the same step.' });
+            messages.push({ role: 'tool', tool_call_id: c.id, name: c.function.name, content });
+          }
+          continue;
+        }
         const unknowns = [...new Set([...body.unknowns, ...staleness(freshness)])];
         const linkError = await this.tools.getLinkLookupError();
         if (linkError) unknowns.push(`Linked Jira issues could not be checked: ${linkError}`);
@@ -145,7 +161,8 @@ export class LlmCopilot {
         return { mode: 'llm', question, ...body, unknowns, dataAsOf: { today, shipmentsImportedAt, inventoryImportedAt } };
       }
       if (reply.toolCalls.length === 0 || last) break;
-      messages.push({ role: 'assistant', content: reply.content, tool_calls: reply.toolCalls });
+      // The API rejects empty text blocks, and a tool-only reply has no text.
+      messages.push({ role: 'assistant', content: reply.content.trim() || 'Looking up the data.', tool_calls: reply.toolCalls });
       for (const [i, c] of reply.toolCalls.entries()) {
         messages.push({ role: 'tool', tool_call_id: c.id, name: c.function.name, content: await this.runTool(c, i, evidence) });
       }
@@ -163,7 +180,14 @@ export class LlmCopilot {
   }
 }
 
-class AnswerRejected extends Error {}
+const UNVERIFIED = 'its answer could not be verified against your data';
+
+/** The model's answer failed validation; `detail` (the offending token) is logged, never shown. */
+class AnswerRejected extends Error {
+  constructor(message: string, readonly detail?: string) {
+    super(message);
+  }
+}
 
 /**
  * Everything the tools returned in this request: the only IDs, numbers and dates an answer may
@@ -234,7 +258,7 @@ class Evidence {
     if (!text) throw new AnswerRejected('the AI returned an empty statement');
     const ids = list(raw.ids, LIMITS.ids).map((id) => {
       const canonical = typeof id === 'string' ? this.ids.get(id.trim().toUpperCase()) : undefined;
-      if (!canonical) throw new AnswerRejected('its answer could not be verified against your data');
+      if (!canonical) throw new AnswerRejected(UNVERIFIED, `id ${String(id).slice(0, 80)}`);
       return canonical;
     });
     return { text, ids: [...new Set(ids)] };
@@ -244,14 +268,14 @@ class Evidence {
   private text(value: unknown): string {
     const text = cleanUntrusted(typeof value === 'string' ? value : '', MAX_STATEMENT) ?? '';
     for (const date of text.match(DATE) ?? []) {
-      if (!this.strings.has(date)) throw new AnswerRejected('its answer could not be verified against your data');
+      if (!this.strings.has(date)) throw new AnswerRejected(UNVERIFIED, `date ${date}`);
     }
     const withoutDates = text.replace(DATE, ' ');
     for (const id of withoutDates.match(ID_IN_TEXT) ?? []) {
-      if (!this.ids.has(id.toUpperCase())) throw new AnswerRejected('its answer could not be verified against your data');
+      if (!this.ids.has(id.toUpperCase())) throw new AnswerRejected(UNVERIFIED, `id in text ${id}`);
     }
     for (const n of withoutDates.replace(ID_IN_TEXT, ' ').match(NUMBER) ?? []) {
-      if (!this.numbers.has(toNumber(n))) throw new AnswerRejected('its answer could not be verified against your data');
+      if (!this.numbers.has(toNumber(n))) throw new AnswerRejected(UNVERIFIED, `number ${n}`);
     }
     return text;
   }

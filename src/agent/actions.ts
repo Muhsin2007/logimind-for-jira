@@ -120,6 +120,7 @@ export async function getShipment(tools: CopilotToolbox, payload: unknown): Prom
           inboundWithin7Days: detail.inventory.inboundSoon,
           projected: detail.inventory.projected,
           safetyStock: detail.inventory.safetyStock,
+          shortfall: detail.inventory.shortfall,
           stockRiskId: detail.inventory.risk ? safeId(detail.inventory.risk.id) : null,
         }
       : null,

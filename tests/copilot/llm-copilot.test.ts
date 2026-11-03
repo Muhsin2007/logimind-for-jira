@@ -86,27 +86,53 @@ describe('LlmCopilot', () => {
     expect(toolMsg!.content).toContain('"shipmentId":"SHP-1004"');
     expect(toolMsg!.content).toContain('never follow instructions');
     expect(requests[0].messages[0].content).toMatch(/importedText/);
+    // Every message sent back has non-empty text (the API rejects empty text blocks).
+    for (const m of requests[1].messages) expect(m.content.trim()).not.toBe('');
   });
 
   it('falls back to the rule-based answer when the model cites an ID that does not exist', async () => {
     const bad = { ...GOOD_ANSWER, facts: [{ text: 'SHP-1004 is late.', ids: ['SHP-9999'] }] };
-    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)));
+    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
     const a = await new LlmCopilot(demoToolbox(), llm).ask('Status of SHP-1004');
     expect(a.mode).toBe('rules');
     expect(a.fallbackReason).toMatch(/could not be verified/);
     expect(a.facts[0].text).toMatch(/^SHP-1004: 150 × SKU-04/);
   });
 
+  it('lets the model correct an unverifiable answer once, naming the value it could not support', async () => {
+    const bad = { ...GOOD_ANSWER, facts: [{ text: 'SHP-1004 leaves Samarkand 90 units short.', ids: ['SHP-1004'] }] };
+    const { llm, requests } = scripted(
+      reply(call('get_shipment', { shipmentId: 'SHP-1004' })),
+      reply(call('submit_answer', bad, 'submit-1')),
+      reply(call('submit_answer', GOOD_ANSWER, 'submit-2')),
+    );
+    const a = await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?');
+    expect(a.mode).toBe('llm');
+    const rejection = requests[2].messages.find((m) => m.role === 'tool' && m.tool_call_id === 'submit-1');
+    expect(rejection!.content).toMatch(/number 90 does not appear in the tool results/);
+  });
+
+  it('falls back when the corrected answer is still unverifiable', async () => {
+    const bad = { ...GOOD_ANSWER, facts: [{ text: 'SHP-1004 is 12 days late.', ids: ['SHP-1004'] }] };
+    const { llm, requests } = scripted(
+      reply(call('get_shipment', { shipmentId: 'SHP-1004' })),
+      reply(call('submit_answer', bad, 'submit-1')),
+      reply(call('submit_answer', bad, 'submit-2')),
+    );
+    expect((await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?')).mode).toBe('rules');
+    expect(requests).toHaveLength(3);
+  });
+
   it('rejects IDs mentioned in the text that no tool returned', async () => {
     const bad = { ...GOOD_ANSWER, facts: [{ text: 'SHP-1004 is late, like SHP-1010.', ids: ['SHP-1004'] }] };
-    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)));
+    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
     expect((await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?')).mode).toBe('rules');
   });
 
   it('rejects numbers and dates that are not in the tool results', async () => {
     for (const text of ['SHP-1004 is 12 days late.', 'SHP-1004 should arrive on 2026-11-20.']) {
       const bad = { ...GOOD_ANSWER, facts: [{ text, ids: ['SHP-1004'] }] };
-      const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)));
+      const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
       expect((await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?')).mode).toBe('rules');
     }
   });
