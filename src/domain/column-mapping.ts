@@ -1,4 +1,4 @@
-import { CsvParseError, detectDelimiter, parseCsv } from './csv';
+import { CsvParseError, detectDelimiter, parseCsv, scanHeader } from './csv';
 import { cleanUntrusted } from './text';
 import type { ImportKind } from './types';
 
@@ -118,15 +118,7 @@ export function validateMapping(kind: ImportKind, columnCount: number, mapping: 
 export function applyMapping(text: string, mapping: (string | null)[]): string {
   const input = text.replace(/^﻿/, '');
   const delimiter = detectDelimiter(input);
-  let inQuotes = false;
-  let end = input.length;
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    if (ch === '"') inQuotes = !inQuotes;
-    else if (!inQuotes && (ch === '\n' || ch === '\r')) {
-      end = i;
-      break;
-    }
-  }
+  // Same header boundaries as the parser, so the preview and the import see the same rows.
+  const { end } = scanHeader(input);
   return mapping.map((f) => f ?? '').join(delimiter) + input.slice(end);
 }

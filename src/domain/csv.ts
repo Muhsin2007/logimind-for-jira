@@ -8,25 +8,46 @@ export class CsvParseError extends Error {}
 
 export type Delimiter = ',' | ';' | '\t';
 
+const DELIMITERS: readonly Delimiter[] = [',', ';', '\t'];
+
+/**
+ * Locates the header record the way `parseCsv` reads it: leading blank lines are skipped and
+ * a quote opens a quoted field only at the start of a field, so a stray `"` inside a header
+ * cell (e.g. `Size 5"`) does not swallow the rows below it. Also counts candidate delimiters.
+ */
+export function scanHeader(text: string): { start: number; end: number; counts: Record<Delimiter, number> } {
+  const start = /^(?: *(?:\r\n|\n|\r))*/.exec(text)?.[0].length ?? 0;
+  const counts: Record<Delimiter, number> = { ',': 0, ';': 0, '\t': 0 };
+  let inQuotes = false;
+  let fieldStart = true;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') i++;
+      else if (ch === '"') inQuotes = false;
+    } else if (ch === '"' && fieldStart) {
+      inQuotes = true;
+    } else if (ch === '\n' || ch === '\r') {
+      return { start, end: i, counts };
+    } else if ((DELIMITERS as readonly string[]).includes(ch)) {
+      counts[ch as Delimiter]++;
+      fieldStart = true;
+      continue;
+    }
+    fieldStart = false;
+  }
+  return { start, end: text.length, counts };
+}
+
 /**
  * Excel in many locales exports CSV with semicolons, and cells copied from Excel are
  * tab-separated. The header decides: another delimiter wins only when the header (outside
  * quotes) has more of it than commas.
  */
 export function detectDelimiter(text: string): Delimiter {
-  let commas = 0;
-  let semicolons = 0;
-  let tabs = 0;
-  let inQuotes = false;
-  for (const ch of text) {
-    if (ch === '"') inQuotes = !inQuotes;
-    else if (!inQuotes && (ch === '\n' || ch === '\r')) break;
-    else if (!inQuotes && ch === ',') commas++;
-    else if (!inQuotes && ch === ';') semicolons++;
-    else if (!inQuotes && ch === '\t') tabs++;
-  }
-  if (tabs > commas && tabs > semicolons) return '\t';
-  return semicolons > commas ? ';' : ',';
+  const { counts } = scanHeader(text);
+  if (counts['\t'] > counts[','] && counts['\t'] > counts[';']) return '\t';
+  return counts[';'] > counts[','] ? ';' : ',';
 }
 
 /**

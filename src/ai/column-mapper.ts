@@ -65,6 +65,7 @@ export class ColumnMapper {
       return result(ai.kind, ai.mapping, preview, 'ai', null);
     } catch (err) {
       const reason = err instanceof LlmUnavailableError ? err.message : 'the AI answer could not be used';
+      if (!(err instanceof LlmUnavailableError)) console.warn('LogiMind AI column mapping fell back to names', { error: err instanceof Error ? err.message : String(err) });
       const best = [...byName].sort((a, b) => score(b) - score(a))[0];
       return result(best.kind, best.mapping, preview, 'name', `AI mapping is unavailable (${reason}). Columns were matched by name only; map the rest yourself.`);
     }

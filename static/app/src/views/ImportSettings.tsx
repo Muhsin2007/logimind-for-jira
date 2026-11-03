@@ -12,12 +12,16 @@ type Busy = null | 'upload' | 'demo' | 'clear' | 'map';
 
 /** A file whose header was not recognised, waiting for the admin to confirm a column mapping. */
 interface PendingMapping {
+  /** Unique per upload, so a re-upload with the same name never reuses an old mapping. */
+  id: number;
   filename: string;
   content: string;
   proposal: Extract<MappingProposal, { ok: true }>;
 }
 
 /** Header problems (unknown, missing or duplicate columns) can be fixed by mapping columns. */
+let nextPendingId = 1;
+
 const isHeaderProblem = (o: ImportOutcome) => !o.ok && o.errors.length > 0 && o.errors.every((e) => e.line === 1 && e.field === null);
 
 export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
@@ -32,6 +36,8 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [pending, setPending] = useState<PendingMapping[]>([]);
   const [pasted, setPasted] = useState('');
+  // While a mapping waits for confirmation, new uploads are blocked so nothing is confirmed against the wrong file.
+  const locked = busy !== null || !canManage || pending.length > 0;
 
   const run = async (kind: Busy, action: () => Promise<void>) => {
     setBusy(kind);
@@ -57,16 +63,21 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: 'File is larger than 1 MB' }] } });
           continue;
         }
-        const outcome = await call('importCsv', { filename, content });
-        if (isHeaderProblem(outcome)) {
-          // Ask for a column mapping (AI-proposed when names do not match) instead of failing the file.
-          const proposal = await call('proposeColumnMapping', { filename, content });
-          if (proposal.ok) {
-            mappings.push({ filename, content, proposal });
-            continue;
+        try {
+          const outcome = await call('importCsv', { filename, content });
+          if (isHeaderProblem(outcome)) {
+            // Ask for a column mapping (AI-proposed when names do not match) instead of failing the file.
+            const proposal = await call('proposeColumnMapping', { filename, content });
+            if (proposal.ok) {
+              mappings.push({ id: nextPendingId++, filename, content, proposal });
+              continue;
+            }
           }
+          results.push({ filename, outcome });
+        } catch (err) {
+          // One failing file must not hide the results of the files already imported.
+          results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: errorMessage(err) }] } });
         }
-        results.push({ filename, outcome });
       }
       setOutcomes(results);
       setPending(mappings);
@@ -112,10 +123,11 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
             type="file"
             accept=".csv,text/csv"
             multiple
-            disabled={busy !== null || !canManage}
+            disabled={locked}
             onChange={(e) => upload(e.target.files)}
           />
           {busy === 'upload' && <span className="muted">Importing… (unrecognised columns are mapped with AI)</span>}
+          {pending.length > 0 && busy === null && <span className="muted">Confirm or cancel the column mapping below first.</span>}
         </div>
         <details>
           <summary>Or paste rows copied from Excel</summary>
@@ -126,11 +138,11 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
             rows={6}
             value={pasted}
             maxLength={MAX_BYTES}
-            disabled={busy !== null || !canManage}
+            disabled={locked}
             onChange={(e) => setPasted(e.target.value)}
           />
           <div className="row">
-            <button type="button" className="btn" disabled={busy !== null || !canManage || !pasted.trim()} onClick={importPasted}>
+            <button type="button" className="btn" disabled={locked || !pasted.trim()} onClick={importPasted}>
               Import pasted rows
             </button>
           </div>
@@ -138,7 +150,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
         {error && <p role="alert" className="text-danger">{error}</p>}
         {pending.map((item) => (
           <ColumnMapping
-            key={item.filename}
+            key={item.id}
             filename={item.filename}
             proposal={item.proposal}
             busy={busy !== null}

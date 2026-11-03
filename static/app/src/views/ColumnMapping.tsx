@@ -3,6 +3,28 @@ import { type ImportKind, type MappingProposal } from '../api';
 
 type Proposal = Extract<MappingProposal, { ok: true }>;
 
+const WHOLE = { test: /^-?\d+$/, label: 'whole numbers' };
+const DATE = { test: /^\d{4}-\d{2}-\d{2}$/, label: 'dates (YYYY-MM-DD)' };
+const SHAPES: Record<string, { test: RegExp; label: string }> = {
+  qty: WHOLE,
+  on_hand: WHOLE,
+  reserved: WHOLE,
+  inbound_qty: WHOLE,
+  safety_stock: WHOLE,
+  unit_cost: { test: /^\d+(\.\d+)?$/, label: 'numbers' },
+  planned_arrival: DATE,
+  eta: DATE,
+  actual_arrival: DATE,
+  updated_at: DATE,
+};
+
+/** A hint when the sample values do not fit the chosen field (e.g. text mapped to qty). */
+function shapeWarning(field: string | null, samples: string[]): string | null {
+  const shape = field ? SHAPES[field] : undefined;
+  if (!shape || samples.every((v) => shape.test.test(v))) return null;
+  return `The first values are not all ${shape.label}; check that this is the right column. Rows that do not fit are rejected.`;
+}
+
 interface Props {
   filename: string;
   proposal: Proposal;
@@ -73,6 +95,7 @@ export function ColumnMapping({ filename, proposal, busy, onConfirm, onCancel }:
                       <option key={f.field} value={f.field}>{f.field}{f.required ? ' *' : ''} — {f.description}</option>
                     ))}
                   </select>
+                  {shapeWarning(mapping[i], c.samples) && <div className="text-danger small">{shapeWarning(mapping[i], c.samples)}</div>}
                 </td>
               </tr>
             ))}

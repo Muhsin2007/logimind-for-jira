@@ -97,6 +97,17 @@ describe('applyMapping', () => {
     expect(out).toBe('sku,\r\nA-1,5\r\n');
   });
 
+  it('treats a stray quote inside a header cell like the parser does, keeping every row', () => {
+    const csv = 'Size 5",Qty\nA-1,5\nA-2,6\n';
+    expect(parseCsv(csv).rows).toHaveLength(2);
+    expect(applyMapping(csv, ['sku', 'on_hand'])).toBe('sku,on_hand\nA-1,5\nA-2,6\n');
+    expect(parseCsv('a 5";b;c\n1;2;3\n').header).toEqual(['a 5"', 'b', 'c']);
+  });
+
+  it('skips leading blank lines before the header, as the parser does', () => {
+    expect(applyMapping('\n  \r\nItem,Qty\nA-1,5\n', ['sku', null])).toBe('sku,\nA-1,5\n');
+  });
+
   it('lets the existing validator import the remapped messy file, rejecting bad rows', () => {
     const r = importCsv(applyMapping(MESSY, MESSY_MAPPING));
     if (!r.ok || r.kind !== 'shipments') throw new Error('expected shipments');
