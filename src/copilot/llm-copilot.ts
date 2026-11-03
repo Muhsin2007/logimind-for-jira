@@ -1,4 +1,4 @@
-import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, type ActionResult } from '../agent/actions';
+import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay, type ActionResult } from '../agent/actions';
 import { cleanUntrusted } from '../domain/text';
 import { LlmUnavailableError, toolArguments, type LlmMessage, type LlmPort, type LlmTool, type LlmToolCall } from '../llm/llm-port';
 import type { CitedStatement, CopilotAnswer, CopilotIntent, CopilotRecommendation, UiLocale } from '../shared/api';
@@ -45,10 +45,18 @@ const DATA_TOOLS: Record<string, { tool: LlmTool; run: (tools: CopilotToolbox, a
   },
   get_inventory: {
     run: getInventory,
-    tool: fn('get_inventory', 'Stock positions for a SKU (on hand, reserved, available, inbound within 7 days, safety stock) and low-stock risk.', {
+    tool: fn('get_inventory', 'Stock positions for a SKU (on hand, reserved, available, inbound within 7 days, safety stock, daily usage, days of cover, projected stock-out date) and low-stock risk.', {
       sku: str('Exact SKU, e.g. SKU-04.'),
       warehouse: str('Optional warehouse name.'),
     }, ['sku']),
+  },
+  simulate_delay: {
+    run: simulateDelay,
+    tool: fn('simulate_delay', 'Read-only what-if: stock positions today and if one shipment (or every upcoming shipment of a supplier) arrives delayDays later: low-stock severity, days of cover, stock-out date. Nothing is saved.', {
+      shipmentId: str('Exact shipment ID to delay, e.g. SHP-1001.'),
+      supplier: str('Or: supplier name, to delay all its upcoming shipments.'),
+      delayDays: { type: 'integer', description: 'Delay in days, 1-30.' },
+    }, ['delayDays']),
   },
   get_linked_jira_issue: {
     run: getLinkedJiraIssue,

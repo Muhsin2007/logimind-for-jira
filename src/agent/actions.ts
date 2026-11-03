@@ -1,4 +1,6 @@
+import type { CoverProjection } from '../domain/cover';
 import { RISK_TYPES, SEVERITIES, type RiskEvent, type RiskType, type Severity } from '../domain/types';
+import { MAX_DELAY_DAYS, type StockOutlook } from '../domain/what-if';
 import { cleanUntrusted } from '../domain/text';
 import type { CopilotToolbox } from '../copilot/tools';
 import type { IssueLinkView } from '../shared/api';
@@ -57,6 +59,15 @@ function riskDto(r: RiskEvent) {
     ruleVersion: r.ruleVersion,
   };
 }
+
+/** Days of cover fields; null values mean "no daily usage" or "lasts beyond the horizon". */
+const coverDto = (c: CoverProjection) => ({
+  dailyUsage: c.dailyUsage,
+  daysOfCover: c.daysOfCover,
+  stockOutDate: c.stockOutDate,
+  belowSafetyStockFrom: c.belowSafetyDate,
+  coveredBeyondHorizon: c.beyondHorizon,
+});
 
 async function withFreshness(tools: CopilotToolbox, result: ActionResult): Promise<ActionResult> {
   const f = await tools.getDataFreshness();
@@ -121,6 +132,7 @@ export async function getShipment(tools: CopilotToolbox, payload: unknown): Prom
           projected: detail.inventory.projected,
           safetyStock: detail.inventory.safetyStock,
           shortfall: detail.inventory.shortfall,
+          ...coverDto(detail.inventory.cover),
           stockRiskId: detail.inventory.risk ? safeId(detail.inventory.risk.id) : null,
         }
       : null,
@@ -153,6 +165,7 @@ export async function getInventory(tools: CopilotToolbox, payload: unknown): Pro
       projected: r.projected,
       safetyStock: r.safetyStock,
       shortfall: r.shortfall,
+      ...coverDto(r.cover),
       risk: r.risk ? riskDto(r.risk) : null,
       importedText: { warehouse: cleanText(r.warehouse), productName: cleanText(r.productName) },
     })),
@@ -171,6 +184,48 @@ export async function getLinkedJiraIssue(tools: CopilotToolbox, payload: unknown
     });
   }
   return withFreshness(tools, { found: true, riskId: safeId(link.riskId), issue: issueDto(link), createdAt: link.createdAt });
+}
+
+const outlookDto = (o: StockOutlook) => ({ projectedWithin7Days: o.projected, lowStockSeverity: o.lowStock, ...coverDto(o.cover) });
+
+/** Read-only what-if: one shipment or every upcoming shipment of a supplier, delayed by 1-30 days. */
+export async function simulateDelay(tools: CopilotToolbox, payload: unknown): Promise<ActionResult> {
+  const delay = input(payload, 'delayDays');
+  const delayDays = typeof delay === 'number' ? delay : typeof delay === 'string' && /^\d+$/.test(delay.trim()) ? Number(delay) : NaN;
+  if (!Number.isInteger(delayDays) || delayDays < 1 || delayDays > MAX_DELAY_DAYS) return invalid(`delayDays must be a whole number from 1 to ${MAX_DELAY_DAYS}`);
+  const id = stringInput(payload, 'shipmentId', ID, false);
+  if (id !== null && typeof id === 'object') return invalid(id.invalid);
+  const rawSupplier = input(payload, 'supplier');
+  const supplier = typeof rawSupplier === 'string' && rawSupplier.trim() ? rawSupplier.trim().slice(0, MAX_TEXT) : null;
+  if (!id && !supplier) return invalid('Give a shipmentId or a supplier');
+
+  const r = await tools.simulateDelay({ shipmentIds: id ? [id] : [], supplier: supplier ?? undefined, delayDays });
+  if (r.shipments.length === 0) {
+    return withFreshness(tools, { found: false, message: 'No open, upcoming shipment matches. Overdue, delivered and cancelled shipments cannot be simulated. Do not guess.' });
+  }
+  return withFreshness(tools, {
+    found: true,
+    readOnly: true,
+    note: 'Simulation only: nothing was changed. today = current data; withDelay = if the shipments arrive delayDays later.',
+    delayDays: r.delayDays,
+    delayedShipments: r.shipments.map((s) => ({
+      shipmentId: s.id,
+      sku: s.sku,
+      qty: s.qty,
+      expectedArrival: s.from,
+      delayedArrival: s.to,
+      importedText: { supplier: cleanText(s.supplier), warehouse: cleanText(s.warehouse) },
+    })),
+    positions: r.rows.map((row) => ({
+      sku: row.sku,
+      safetyStock: row.safetyStock,
+      worse: row.worse,
+      today: outlookDto(row.before),
+      withDelay: outlookDto(row.after),
+      importedText: { warehouse: cleanText(row.warehouse) },
+    })),
+    untrackedLocations: r.untracked.length,
+  });
 }
 
 /** Wraps an action so storage or Jira failures become a clear, non-fabricated answer. */

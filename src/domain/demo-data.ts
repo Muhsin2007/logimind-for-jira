@@ -55,20 +55,22 @@ const SHIPMENTS: Row[] = [
   ['SHP-1030', 'PO-530', 'Silk Road Motors', 'SKU-04', 140, 4, 4, null, 'confirmed', 'Samarkand', 'SilkWay Cargo'],
 ];
 
-// [sku, warehouse, onHand, reserved, safetyStock, unitCost]
-const INVENTORY: [string, string, number, number, number, number][] = [
-  ['SKU-01', 'Tashkent', 35, 10, 40, 12.5],
-  ['SKU-01', 'Samarkand', 60, 5, 30, 12.5],
-  ['SKU-02', 'Tashkent', 90, 15, 30, 4.2],
-  ['SKU-03', 'Tashkent', 18, 5, 35, 3.1],
-  ['SKU-04', 'Samarkand', 12, 12, 50, 18.0],
-  ['SKU-05', 'Tashkent', 8, 6, 20, 46.0],
-  ['SKU-06', 'Tashkent', 400, 120, 100, 7.75],
-  ['SKU-07', 'Samarkand', 4, 1, 10, 210.0],
-  ['SKU-08', 'Tashkent', 70, 20, 40, 9.4],
-  ['SKU-09', 'Tashkent', 22, 2, 25, 64.0],
-  ['SKU-10', 'Tashkent', 600, 150, 300, 2.3],
-  ['SKU-10', 'Samarkand', 140, 40, 200, 2.3],
+// [sku, warehouse, onHand, reserved, safetyStock, unitCost, dailyUsage]
+// Usage is chosen so the demo shows a stock-out the 7-day rules cannot see yet (SKU-01 at
+// Samarkand runs out before SHP-1011 arrives) and what-if stories (delaying SHP-1001 or SHP-1027).
+const INVENTORY: [string, string, number, number, number, number, number][] = [
+  ['SKU-01', 'Tashkent', 35, 10, 40, 12.5, 8],
+  ['SKU-01', 'Samarkand', 60, 5, 30, 12.5, 3],
+  ['SKU-02', 'Tashkent', 90, 15, 30, 4.2, 6],
+  ['SKU-03', 'Tashkent', 18, 5, 35, 3.1, 4],
+  ['SKU-04', 'Samarkand', 12, 12, 50, 18.0, 5],
+  ['SKU-05', 'Tashkent', 8, 6, 20, 46.0, 3],
+  ['SKU-06', 'Tashkent', 400, 120, 100, 7.75, 12],
+  ['SKU-07', 'Samarkand', 4, 1, 10, 210.0, 0.5],
+  ['SKU-08', 'Tashkent', 70, 20, 40, 9.4, 5],
+  ['SKU-09', 'Tashkent', 22, 2, 25, 64.0, 2],
+  ['SKU-10', 'Tashkent', 600, 150, 300, 2.3, 40],
+  ['SKU-10', 'Samarkand', 140, 40, 200, 2.3, 8],
 ];
 
 export function demoShipmentsCsv(today: IsoDate): string {
@@ -81,9 +83,9 @@ export function demoShipmentsCsv(today: IsoDate): string {
 }
 
 export function demoInventoryCsv(today: IsoDate): string {
-  const header = 'sku,product_name,warehouse,on_hand,reserved,safety_stock,unit_cost,updated_at';
-  const lines = INVENTORY.map(([sku, wh, onHand, reserved, safety, cost]) =>
-    [sku, PRODUCTS[sku], wh, onHand, reserved, safety, cost, today].join(','),
+  const header = 'sku,product_name,warehouse,on_hand,reserved,safety_stock,unit_cost,daily_usage,updated_at';
+  const lines = INVENTORY.map(([sku, wh, onHand, reserved, safety, cost, usage]) =>
+    [sku, PRODUCTS[sku], wh, onHand, reserved, safety, cost, usage, today].join(','),
   );
   return [header, ...lines].join('\n');
 }

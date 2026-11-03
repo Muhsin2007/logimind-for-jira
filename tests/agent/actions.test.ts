@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanText, DATA_NOTICE, getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely } from '../../src/agent/actions';
+import { cleanText, DATA_NOTICE, getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from '../../src/agent/actions';
 import { ServiceToolbox } from '../../src/copilot/tools';
 import { demoInventoryCsv, demoShipmentsCsv } from '../../src/domain/demo-data';
 import { importCsv } from '../../src/domain/importer';
@@ -85,6 +85,33 @@ describe('Rovo actions', () => {
     expect(await getLinkedJiraIssue(demoTools(), { riskId: 'LATE_SHIPMENT:SHP-1004' })).toMatchObject({ found: true, issue: { issueKey: 'SCRUM-5' } });
     const none = await getLinkedJiraIssue(demoTools(), { riskId: 'ETA_SLIP:SHP-1011' });
     expect(none).toMatchObject({ found: false, message: 'No Jira issue has been created for that risk.' });
+  });
+
+  it('get-inventory includes days of cover and the projected stock-out date', async () => {
+    const out = (await getInventory(demoTools(), { sku: 'SKU-01', warehouse: 'Samarkand' })) as { positions: Record<string, unknown>[] };
+    // Not a LOW_STOCK risk (projected 55 ≥ safety 30), yet it runs out before SHP-1011 arrives on day 21.
+    expect(out.positions[0]).toMatchObject({ dailyUsage: 3, daysOfCover: 18, stockOutDate: '2026-11-20', risk: null });
+  });
+
+  it('simulate-delay is read-only and compares stock with and without the delay', async () => {
+    const out = await simulateDelay(demoTools(), { shipmentId: 'SHP-1001', delayDays: 10 });
+    expect(out).toMatchObject({
+      ok: true,
+      found: true,
+      readOnly: true,
+      delayDays: 10,
+      delayedShipments: [{ shipmentId: 'SHP-1001', expectedArrival: '2026-11-08', delayedArrival: '2026-11-18', importedText: { supplier: 'NorthStar Parts' } }],
+      positions: [{ sku: 'SKU-01', worse: true, today: { stockOutDate: '2026-11-29' }, withDelay: { stockOutDate: '2026-11-14' }, importedText: { warehouse: 'Tashkent' } }],
+    });
+    const bySupplier = (await simulateDelay(demoTools(), { supplier: 'northstar parts', delayDays: 5 })) as { delayedShipments: { shipmentId: string }[] };
+    expect(bySupplier.delayedShipments.map((s) => s.shipmentId)).toEqual(['SHP-1005', 'SHP-1001', 'SHP-1011']);
+  });
+
+  it('simulate-delay validates its inputs and reports unknown shipments', async () => {
+    expect(await simulateDelay(demoTools(), { delayDays: 3 })).toMatchObject({ ok: false });
+    expect(await simulateDelay(demoTools(), { shipmentId: 'SHP-1001', delayDays: 31 })).toMatchObject({ ok: false, error: 'delayDays must be a whole number from 1 to 30' });
+    expect(await simulateDelay(demoTools(), { shipmentId: 'SHP-1001', delayDays: 'x' })).toMatchObject({ ok: false });
+    expect(await simulateDelay(demoTools(), { shipmentId: 'SHP-9999', delayDays: 3 })).toMatchObject({ ok: true, found: false });
   });
 
   it('never names an issue the user cannot see', async () => {

@@ -78,7 +78,7 @@ describe('LlmCopilot', () => {
     expect(a.recommendations[0]).toMatchObject({ priority: 'high', confidence: 'high', ids: ['SHP-1004'] });
 
     // Only the read-only tools (and the answer tool) are offered; every call is token-capped.
-    expect(requests[0].tools!.map((t) => t.function.name).sort()).toEqual(['get_inventory', 'get_linked_jira_issue', 'get_risk_summary', 'get_shipment', 'submit_answer']);
+    expect(requests[0].tools!.map((t) => t.function.name).sort()).toEqual(['get_inventory', 'get_linked_jira_issue', 'get_risk_summary', 'get_shipment', 'simulate_delay', 'submit_answer']);
     for (const r of requests) expect(r.maxTokens).toBeLessThanOrEqual(800);
     // The tool result goes back to the model as data, CSV text flagged as untrusted.
     const toolMsg = requests[1].messages.find((m) => m.role === 'tool');
@@ -246,6 +246,19 @@ describe('LlmCopilot', () => {
     const bad = { ...ru, facts: [{ text: 'SHP-1004 опаздывает на 12 дней.', ids: ['SHP-1004'] }] };
     const second = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
     expect((await new LlmCopilot(demoToolbox(), second.llm).ask('SHP-1004?', 'ru')).mode).toBe('rules');
+  });
+
+  it('can run the read-only what-if tool and cite the simulated stock-out date', async () => {
+    const answer = {
+      intent: 'inventory',
+      facts: [{ text: 'If SHP-1001 arrives 10 days later, SKU-01 at Tashkent runs out on 2026-11-14 instead of 2026-11-29.', ids: ['SHP-1001', 'SKU-01@Tashkent'] }],
+      recommendations: [],
+      unknowns: [],
+    };
+    const { llm, requests } = scripted(reply(call('simulate_delay', { shipmentId: 'SHP-1001', delayDays: 10 })), reply(call('submit_answer', answer)));
+    const a = await new LlmCopilot(demoToolbox(), llm).ask('What if SHP-1001 is 10 days late?');
+    expect(a.mode).toBe('llm');
+    expect(JSON.parse(requests[1].messages.at(-1)!.content)).toMatchObject({ ok: true, found: true, delayDays: 10 });
   });
 
   it('answers in English by default', async () => {

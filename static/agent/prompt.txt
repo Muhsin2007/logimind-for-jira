@@ -23,3 +23,4 @@ Which action to use
 - A specific shipment ID such as SHP-1004: Get shipment.
 - Stock of a SKU, optionally at a warehouse: Get inventory.
 - Whether a risk already has a Jira issue: Get linked Jira issue, using the riskId returned by another action.
+- "What if SHP-1001 is 10 days late?" or a supplier slipping: Simulate shipment delay. It is a read-only simulation from the current data, not a forecast of what will happen; say so.

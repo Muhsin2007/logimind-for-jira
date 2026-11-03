@@ -37,6 +37,8 @@ export interface InventoryItem {
   safetyStock: number;
   unitCost: number | null;
   updatedAt: IsoDate | null;
+  /** Average units used or sold per day; optional, drives days of cover. Absent in data imported before it existed. */
+  dailyUsage?: number | null;
 }
 
 export const RISK_TYPES = ['LATE_SHIPMENT', 'ETA_SLIP', 'MISSING_ETA', 'LOW_STOCK'] as const;

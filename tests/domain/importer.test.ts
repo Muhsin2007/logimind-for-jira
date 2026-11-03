@@ -120,7 +120,23 @@ describe('importCsv — inventory', () => {
   it('imports rows and defaults optional quantities to 0', () => {
     const r = importCsv('sku,warehouse,on_hand,safety_stock\nSKU-1,Tashkent,10,5');
     if (!r.ok || r.kind !== 'inventory') throw new Error('expected inventory');
-    expect(r.records[0]).toMatchObject({ reserved: 0, inboundQty: 0, unitCost: null });
+    expect(r.records[0]).toMatchObject({ reserved: 0, inboundQty: 0, unitCost: null, dailyUsage: null });
+  });
+
+  it('accepts an optional daily_usage (non-negative, decimals allowed, at most 1e9)', () => {
+    const csv = [
+      'sku,warehouse,on_hand,safety_stock,daily_usage',
+      'SKU-1,W,10,5,2.5',
+      'SKU-2,W,10,5,0',
+      'SKU-3,W,10,5,',
+      'SKU-4,W,10,5,-1',
+      'SKU-5,W,10,5,abc',
+      'SKU-6,W,10,5,1000000001',
+    ].join('\n');
+    const r = importCsv(csv);
+    if (!r.ok || r.kind !== 'inventory') throw new Error('expected inventory');
+    expect(r.records.map((i) => i.dailyUsage)).toEqual([2.5, 0, null]);
+    expect(r.errors.map((e) => `${e.line}:${e.field}`)).toEqual(['5:daily_usage', '6:daily_usage', '7:daily_usage']);
   });
 
   it('rejects reserved > on_hand, negative stock, bad cost and duplicates', () => {

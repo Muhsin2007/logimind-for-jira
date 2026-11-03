@@ -3,6 +3,7 @@ import { todayUtc } from '../domain/dates';
 import { demoInventoryCsv, demoShipmentsCsv } from '../domain/demo-data';
 import { applyMapping, previewColumns, validateMapping } from '../domain/column-mapping';
 import { importCsv } from '../domain/importer';
+import { buildPipelineIndex, coverFor, type PipelineIndex } from '../domain/cover';
 import { computeKpis } from '../domain/kpis';
 import { buildInboundIndex, evaluateRisks, inventoryEntityKey, stockPosition, type InboundIndex } from '../domain/risk-engine';
 import { SEVERITIES, type ImportBatch, type ImportKind, type InventoryItem, type IsoDate, type RiskEvent, type Shipment } from '../domain/types';
@@ -18,6 +19,7 @@ interface Snapshot {
   shipments: Shipment[];
   inventory: InventoryItem[];
   index: InboundIndex;
+  pipeline: PipelineIndex;
   risks: RiskEvent[];
   risksByEntity: Map<string, RiskEvent[]>;
 }
@@ -42,7 +44,7 @@ export class LogisticsService {
       if (list) list.push(r);
       else risksByEntity.set(key, [r]);
     }
-    return { today, shipments, inventory, index, risks, risksByEntity };
+    return { today, shipments, inventory, index, pipeline: buildPipelineIndex(shipments), risks, risksByEntity };
   }
 
   async getDashboard(): Promise<DashboardData> {
@@ -179,5 +181,5 @@ function toShipmentRow(s: Shipment, risks: RiskEvent[]): ShipmentRow {
 
 function toInventoryRow(item: InventoryItem, snap: Snapshot): InventoryRow {
   const risk = snap.risksByEntity.get(`inventory:${inventoryEntityKey(item)}`)?.[0] ?? null;
-  return { ...item, ...stockPosition(item, snap.index), risk };
+  return { ...item, dailyUsage: item.dailyUsage ?? null, ...stockPosition(item, snap.index), risk, cover: coverFor(item, snap.pipeline, snap.today) };
 }

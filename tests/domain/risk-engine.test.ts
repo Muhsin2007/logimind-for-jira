@@ -138,5 +138,7 @@ describe('demo dataset', () => {
     expect(i.errors).toEqual([]);
     const riskTypes = new Set(evaluateRisks(s.records, i.records, TODAY).map((r) => r.type));
     expect([...riskTypes].sort()).toEqual(['ETA_SLIP', 'LATE_SHIPMENT', 'LOW_STOCK', 'MISSING_ETA']);
+    // Every stock position has a daily usage, so days of cover can be shown for all of them.
+    expect(i.records.every((r) => typeof r.dailyUsage === 'number' && r.dailyUsage > 0)).toBe(true);
   });
 });

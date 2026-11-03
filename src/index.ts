@@ -1,6 +1,6 @@
 import Resolver from '@forge/resolver';
 import { ColumnMapper } from './ai/column-mapper';
-import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely } from './agent/actions';
+import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from './agent/actions';
 import { canManageData, requireDataManager } from './auth/access';
 import { LlmCopilot } from './copilot/llm-copilot';
 import { MAX_QUESTION } from './copilot/rule-based-copilot';
@@ -124,3 +124,4 @@ export const agentRiskSummary = (payload: unknown) => safely(() => getRiskSummar
 export const agentShipment = (payload: unknown) => safely(() => getShipment(toolbox(), payload));
 export const agentInventory = (payload: unknown) => safely(() => getInventory(toolbox(), payload));
 export const agentLinkedIssue = (payload: unknown) => safely(() => getLinkedJiraIssue(toolbox(), payload));
+export const agentSimulateDelay = (payload: unknown) => safely(() => simulateDelay(toolbox(), payload));

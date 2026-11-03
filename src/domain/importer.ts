@@ -235,6 +235,7 @@ function toInventory(r: Row): InventoryItem | { errors: RowError[] } {
     safetyStock: r.int('safety_stock', { required: true, min: 0 }),
     unitCost: r.decimal('unit_cost'),
     updatedAt: r.date('updated_at', false),
+    dailyUsage: r.decimal('daily_usage'),
   };
   if (r.errors.length === 0 && (item.reserved as number) > (item.onHand as number)) {
     r.errors.push({ line: r.line, field: 'reserved', message: 'cannot exceed on_hand' });

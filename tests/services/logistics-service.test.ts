@@ -110,6 +110,40 @@ describe('LogisticsService reads', () => {
   });
 });
 
+describe('days of cover', () => {
+  const stock = (over: Partial<InventoryItem>): InventoryItem => ({
+    sku: 'SKU-1', productName: null, warehouse: 'W', onHand: 40, reserved: 0, inboundQty: 0, safetyStock: 10, unitCost: null, updatedAt: null,
+    dailyUsage: 5, ...over,
+  });
+  const inbound = (over: Partial<Shipment>): Shipment => ({ ...late, id: 'SHP-IN', qty: 100, plannedArrival: '2026-11-20', eta: '2026-11-20', ...over });
+
+  it('projects stock-out from available stock and all open inbound by expected arrival (beyond the 7-day window too)', async () => {
+    // 40 / 5 = day 8 without inbound; +100 arriving on day 6 (2026-11-08) → 40−30+100 = 110 → 22 more days.
+    const service = new LogisticsService(mockRepo([inbound({ eta: '2026-11-08' })], [stock({})]), () => NOW);
+    const { items } = await service.listInventory();
+    expect(items[0].cover).toEqual({ dailyUsage: 5, daysOfCover: 28, stockOutDate: '2026-11-30', belowSafetyDate: '2026-11-28', beyondHorizon: false });
+    // Day 6 is also inside the 7-day window the risk rules use.
+    expect(items[0].inboundSoon).toBe(100);
+  });
+
+  it('ignores overdue, delivered and other-location shipments, and works with data imported before daily usage existed', async () => {
+    const legacy = stock({});
+    delete legacy.dailyUsage;
+    const service = new LogisticsService(
+      mockRepo([inbound({ eta: '2026-10-30' }), inbound({ id: 'D', status: 'delivered', actualArrival: '2026-11-01' }), inbound({ id: 'O', warehouse: 'Other' })], [stock({}), { ...legacy, sku: 'SKU-2' }]),
+      () => NOW,
+    );
+    const { items } = await service.listInventory();
+    expect(items.find((i) => i.sku === 'SKU-1')?.cover).toMatchObject({ daysOfCover: 8, stockOutDate: '2026-11-10' });
+    expect(items.find((i) => i.sku === 'SKU-2')?.cover).toMatchObject({ dailyUsage: null, daysOfCover: null });
+  });
+
+  it('shows the destination cover in the shipment detail', async () => {
+    const service = new LogisticsService(mockRepo([inbound({ eta: '2026-11-08' })], [stock({})]), () => NOW);
+    expect((await service.getShipment('SHP-IN'))?.inventory?.cover.stockOutDate).toBe('2026-11-30');
+  });
+});
+
 describe('LogisticsService.loadDemoData', () => {
   it('imports both demo files through the normal importer under one lock', async () => {
     const repo = mockRepo();

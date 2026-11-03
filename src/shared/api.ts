@@ -3,6 +3,7 @@
  * Resolver names are the keys of `ResolverApi`.
  */
 import type { FieldSpec } from '../domain/column-mapping';
+import type { CoverProjection } from '../domain/cover';
 import type {
   ImportBatch,
   ImportKind,
@@ -18,7 +19,7 @@ import type {
   Shipment,
 } from '../domain/types';
 
-export type { FieldSpec, ImportBatch, ImportKind, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
+export type { CoverProjection, FieldSpec, ImportBatch, ImportKind, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
 
 /** UI language chosen by the person; English is the default. */
 export type UiLocale = 'en' | 'ru';
@@ -43,6 +44,8 @@ export interface InventoryRow extends InventoryItem {
   shortfall: number;
   inboundShipmentIds: string[];
   risk: RiskEvent | null;
+  /** Days of cover and projected stock-out from daily usage and all open inbound shipments. */
+  cover: CoverProjection;
 }
 
 export interface ShipmentDetail {

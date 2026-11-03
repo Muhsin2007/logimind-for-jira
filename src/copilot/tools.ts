@@ -1,4 +1,5 @@
 import { locationKey } from '../domain/risk-engine';
+import { simulateDelay, type DelayScenario, type WhatIfResult } from '../domain/what-if';
 import type { ImportBatch, IsoDate, RiskEvent, RiskType, Severity } from '../domain/types';
 import type { InventoryRow, IssueLinksData, IssueLinkView, ShipmentDetail, ShipmentRow } from '../shared/api';
 import type { IssueService } from '../services/issue-service';
@@ -32,6 +33,8 @@ export interface CopilotToolbox {
   getShipment(shipmentId: string): Promise<ShipmentDetail | null>;
   getInventory(sku: string, warehouse?: string): Promise<InventoryRow[]>;
   getLinkedJiraIssue(riskId: string): Promise<IssueLinkView | null>;
+  /** Read-only what-if: stock with and without delaying shipments. Nothing is stored. */
+  simulateDelay(scenario: DelayScenario): Promise<WhatIfResult>;
   /** Set when Jira links or statuses could not be read, so answers can say so. */
   getLinkLookupError(): Promise<string | null>;
   getDataFreshness(): Promise<DataFreshness>;
@@ -93,6 +96,11 @@ export class ServiceToolbox implements CopilotToolbox {
     const wanted = sku.trim().toUpperCase();
     const wh = warehouse?.trim().toLowerCase();
     return items.filter((i) => i.sku.toUpperCase() === wanted && (!wh || i.warehouse.trim().toLowerCase() === wh));
+  }
+
+  async simulateDelay(scenario: DelayScenario): Promise<WhatIfResult> {
+    const { today, shipments, items } = await this.overview();
+    return simulateDelay(shipments, items, today, scenario);
   }
 
   async getLinkedJiraIssue(riskId: string): Promise<IssueLinkView | null> {

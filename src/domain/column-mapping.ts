@@ -35,6 +35,7 @@ export const SCHEMA: Record<ImportKind, FieldSpec[]> = {
     { field: 'inbound_qty', required: false, description: 'quantity on order / inbound' },
     { field: 'safety_stock', required: true, description: 'safety stock / minimum / reorder level' },
     { field: 'unit_cost', required: false, description: 'cost per unit' },
+    { field: 'daily_usage', required: false, description: 'average units used or sold per day' },
     { field: 'updated_at', required: false, description: 'date the stock figure was taken' },
   ],
 };
