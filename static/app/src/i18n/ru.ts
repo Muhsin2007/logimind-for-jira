@@ -444,6 +444,7 @@ export const ru: Messages = {
   timelineActual: 'Получено',
   timelineNoEta: 'ETA в данных нет',
   timelineNotYet: 'Ещё не получено',
+  overdueBy: (n) => `прошла ${days(n)} назад, груз не получен`,
   vsPlan: (n) => (n === 0 ? 'в плановую дату' : n > 0 ? `на ${days(n)} позже плана` : `на ${days(-n)} раньше плана`),
 
   sumPositions: 'Складские позиции',

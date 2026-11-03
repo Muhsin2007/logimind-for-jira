@@ -21,13 +21,16 @@ function Section({ title, icon, children }: { title: string; icon: IconName; chi
 function Timeline({ shipment }: { shipment: Shipment }) {
   const { t, fmt } = useI18n();
   const slip = shipment.eta ? daysBetween(shipment.plannedArrival, shipment.eta) : null;
+  // An open shipment whose planned date has passed is overdue, whatever its ETA says.
+  const overdue = isOpen(shipment) ? daysBetween(shipment.plannedArrival, todayUtc()) : 0;
   const arrived = shipment.actualArrival ? daysBetween(shipment.plannedArrival, shipment.actualArrival) : null;
   return (
     <ol className="timeline">
-      <li className="tl-step tl-done">
+      <li className={`tl-step ${overdue > 0 ? 'tl-late' : 'tl-done'}`}>
         <span className="tl-dot" aria-hidden="true" />
         <span className="tl-label">{t.timelinePlanned}</span>
         <span className="tl-date">{fmt.date(shipment.plannedArrival)}</span>
+        {overdue > 0 && <span className="tl-note">{t.overdueBy(overdue)}</span>}
       </li>
       <li className={`tl-step ${slip !== null && slip > 0 ? 'tl-late' : shipment.eta ? 'tl-current' : ''}`}>
         <span className="tl-dot" aria-hidden="true" />

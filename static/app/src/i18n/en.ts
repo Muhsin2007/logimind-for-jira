@@ -429,6 +429,7 @@ export const en = {
   timelineActual: 'Received',
   timelineNoEta: 'No ETA in the data',
   timelineNotYet: 'Not received yet',
+  overdueBy: (n: number) => `passed ${daysEn(n)} ago, not received`,
   vsPlan: (days: number) => (days === 0 ? 'on the planned date' : days > 0 ? `${daysEn(days)} after plan` : `${daysEn(-days)} before plan`),
 
   // Inventory (redesign)

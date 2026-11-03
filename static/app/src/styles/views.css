@@ -256,3 +256,4 @@
 .sidebar-state .icon { margin-top: 2px; }
 /* The issue sidebar sits on Jira's own panel background. */
 html:has(.sidebar), html:has(.sidebar) body { background: transparent; }
+.dist-legend .badge { justify-self: start; }
