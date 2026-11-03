@@ -12,12 +12,92 @@ modules:
         function: resolver
       title: LogiMind
       label: LogiMind risk
+  rovo:agent:
+    - key: logimind-agent
+      name: LogiMind
+      description: Read-only logistics risk assistant. Summarises shipment and stock risks, looks up shipments, inventory and linked Jira issues from LogiMind data.
+      prompt: resource:agent-prompt;prompt.txt
+      conversationStarters:
+        - Give me today's logistics risk summary
+        - What is the status of shipment SHP-1004?
+        - Which SKUs are below safety stock?
+        - Is there a Jira issue for the most critical risk?
+      actions:
+        - get-risk-summary
+        - get-shipment
+        - get-inventory
+        - get-linked-jira-issue
+  action:
+    - key: get-risk-summary
+      name: Get logistics risk summary
+      function: agentRiskSummary
+      actionVerb: GET
+      description: Returns open logistics risks from LogiMind's deterministic rules, with counts by severity and the most severe risks (risk IDs, types, numeric evidence) and the data date.
+      inputs:
+        severity:
+          title: Severity
+          type: string
+          required: false
+          description: Optional filter - critical, high, medium or low.
+        limit:
+          title: Number of risks
+          type: integer
+          required: false
+          description: How many of the most severe risks to return (1-10, default 5).
+    - key: get-shipment
+      name: Get shipment
+      function: agentShipment
+      actionVerb: GET
+      description: Returns stored facts for one shipment ID - status, quantities, planned arrival, ETA, its risks with any linked Jira issue, and stock at the destination warehouse. Returns found false if the ID does not exist.
+      inputs:
+        shipmentId:
+          title: Shipment ID
+          type: string
+          required: true
+          description: The exact shipment ID from LogiMind, e.g. SHP-1004.
+    - key: get-inventory
+      name: Get inventory
+      function: agentInventory
+      actionVerb: GET
+      description: Returns stock positions for a SKU (on hand, reserved, available, inbound within 7 days, projected, safety stock) and any low-stock risk, optionally for one warehouse.
+      inputs:
+        sku:
+          title: SKU
+          type: string
+          required: true
+          description: The exact SKU from LogiMind, e.g. SKU-04.
+        warehouse:
+          title: Warehouse
+          type: string
+          required: false
+          description: Optional warehouse name to filter by.
+    - key: get-linked-jira-issue
+      name: Get linked Jira issue
+      function: agentLinkedIssue
+      actionVerb: GET
+      description: Returns the Jira issue key and current status created from a LogiMind risk, if one exists.
+      inputs:
+        riskId:
+          title: Risk ID
+          type: string
+          required: true
+          description: A risk ID returned by another LogiMind action, e.g. LATE_SHIPMENT:SHP-1004.
   function:
     - key: resolver
       handler: index.handler
+    - key: agentRiskSummary
+      handler: index.agentRiskSummary
+    - key: agentShipment
+      handler: index.agentShipment
+    - key: agentInventory
+      handler: index.agentInventory
+    - key: agentLinkedIssue
+      handler: index.agentLinkedIssue
 resources:
   - key: main
     path: static/app/build
+  - key: agent-prompt
+    path: static/agent
 app:
   runtime:
     name: nodejs24.x

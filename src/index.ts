@@ -1,4 +1,5 @@
 import Resolver from '@forge/resolver';
+import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely } from './agent/actions';
 import { canManageData, requireDataManager } from './auth/access';
 import { MAX_QUESTION, RuleBasedCopilot } from './copilot/rule-based-copilot';
 import { ServiceToolbox } from './copilot/tools';
@@ -84,3 +85,10 @@ resolver.define('saveJiraConfig', async ({ payload, context }) => {
 });
 
 export const handler = resolver.getDefinitions();
+
+// Rovo agent actions (read-only). Each request gets its own toolbox: one consistent data read.
+const toolbox = () => new ServiceToolbox(logistics, issues);
+export const agentRiskSummary = (payload: unknown) => safely(() => getRiskSummary(toolbox(), payload));
+export const agentShipment = (payload: unknown) => safely(() => getShipment(toolbox(), payload));
+export const agentInventory = (payload: unknown) => safely(() => getInventory(toolbox(), payload));
+export const agentLinkedIssue = (payload: unknown) => safely(() => getLinkedJiraIssue(toolbox(), payload));
