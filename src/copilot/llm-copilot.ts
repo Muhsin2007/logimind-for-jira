@@ -10,6 +10,8 @@ export const MAX_LLM_CALLS = 4;
 const MAX_TOKENS = 800;
 const MAX_TOOL_CALLS_PER_ROUND = 4;
 const MAX_TOOL_RESULT = 8000;
+/** Stop starting model calls after this long, so the resolver can still answer from rules. */
+const DEADLINE_MS = 14_000;
 const MAX_STATEMENT = 400;
 const LIMITS = { facts: 8, recommendations: 5, unknowns: 6, ids: 8 };
 /** "inbound within 7 days" is part of the tool vocabulary, not a data value. */
@@ -18,8 +20,10 @@ const VOCABULARY_NUMBERS = [7];
 const INTENTS: CopilotIntent[] = ['risk_summary', 'shipment', 'inventory', 'help'];
 const LEVELS = ['high', 'medium', 'low'] as const;
 const DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
-/** Record-like tokens in prose: letters, a hyphen, digits (SHP-1004, SKU-04, SCRUM-5, PO-504). */
-const ID_IN_TEXT = /\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*-[A-Za-z]*\d[A-Za-z0-9]*\b/g;
+/** Record-like tokens in prose: capitals, a hyphen, digits (SHP-1004, SKU-04, SCRUM-5, PO-504). */
+const ID_IN_TEXT = /\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-[A-Z]*\d[A-Z0-9]*\b/g;
+/** Tool-result fields whose string values are record identifiers. */
+const ID_FIELDS = new Set(['shipmentId', 'orderId', 'sku', 'riskId', 'stockRiskId', 'issueKey', 'key', 'inboundShipmentIds']);
 const NUMBER = /\d[\d,]*(?:\.\d+)?/g;
 
 const str = (description: string) => ({ type: 'string', description });
@@ -102,6 +106,7 @@ export class LlmCopilot {
   constructor(
     private readonly tools: CopilotToolbox,
     private readonly llm: LlmPort,
+    private readonly opts: { accountId?: string | null; now?: () => number } = {},
   ) {
     this.fallback = new RuleBasedCopilot(tools);
   }
@@ -112,15 +117,20 @@ export class LlmCopilot {
       return await this.askModel(question);
     } catch (err) {
       const reason = err instanceof LlmUnavailableError || err instanceof AnswerRejected ? err.message : 'the AI answer could not be used';
-      if (!(err instanceof LlmUnavailableError)) console.warn('LogiMind AI copilot fell back to rules', { reason, detail: err instanceof AnswerRejected ? err.detail : err instanceof Error ? err.message : String(err) });
+      if (!(err instanceof LlmUnavailableError)) {
+        const detail = err instanceof AnswerRejected ? err.detail : err instanceof Error ? err.message : String(err);
+        console.warn('LogiMind AI copilot fell back to rules', { reason, detail: cleanUntrusted(detail, 60) });
+      }
       const rules = await this.fallback.ask(question);
       return { ...rules, fallbackReason: `AI answer unavailable (${reason}). Showing the rule-based answer.` };
     }
   }
 
   private async askModel(question: string): Promise<CopilotAnswer> {
+    const now = this.opts.now ?? Date.now;
+    const started = now();
     const freshness = await this.tools.getDataFreshness();
-    const evidence = new Evidence(question);
+    const evidence = new Evidence(question, freshness.today);
     const messages: LlmMessage[] = [
       { role: 'system', content: systemPrompt(freshness.today) },
       { role: 'user', content: `Question from a Jira user:\n${question}` },
@@ -129,8 +139,10 @@ export class LlmCopilot {
     let corrected = false;
     for (let round = 0; round < MAX_LLM_CALLS; round++) {
       const last = round === MAX_LLM_CALLS - 1;
+      if (now() - started > DEADLINE_MS) throw new LlmUnavailableError('the AI took too long');
       const reply = await this.llm.chat({
         purpose: 'copilot',
+        accountId: this.opts.accountId,
         maxTokens: MAX_TOKENS,
         tools: TOOLS,
         toolChoice: last ? { type: 'function', function: { name: SUBMIT.function.name } } : 'required',
@@ -138,6 +150,7 @@ export class LlmCopilot {
       });
       const submit = reply.toolCalls.find((c) => c.function.name === SUBMIT.function.name);
       if (submit) {
+        if (reply.finishReason === 'length') throw new Error('answer cut off at the token limit');
         let body;
         try {
           body = evidence.verify(toolArguments(submit));
@@ -175,8 +188,11 @@ export class LlmCopilot {
     if (!entry) return JSON.stringify({ ok: false, error: `Tool ${cleanUntrusted(c.function.name, 40)} is not available. Only read-only LogiMind tools exist.` });
     if (index >= MAX_TOOL_CALLS_PER_ROUND) return JSON.stringify({ ok: false, error: `Skipped: at most ${MAX_TOOL_CALLS_PER_ROUND} tool calls per step.` });
     const result = await safely(() => entry.run(this.tools, toolArguments(c)));
+    const json = JSON.stringify(result);
+    // Evidence is only what the model actually saw; an oversized result is withheld entirely.
+    if (json.length > MAX_TOOL_RESULT) return JSON.stringify({ ok: false, error: 'Result too large; ask for fewer records.' });
     evidence.add(result);
-    return JSON.stringify(result).slice(0, MAX_TOOL_RESULT);
+    return json;
   }
 }
 
@@ -191,47 +207,44 @@ class AnswerRejected extends Error {
 
 /**
  * Everything the tools returned in this request: the only IDs, numbers and dates an answer may
- * state. An ID that exists in the data but was not looked up is rejected too: nothing about it was checked.
+ * state. An ID that exists in the data but was not looked up is rejected too: nothing about it
+ * was checked. Only structured fields count: IDs from identifier fields, numbers from numeric
+ * fields, never anything inside CSV free text (importedText) or the question.
  */
 class Evidence {
   private readonly ids = new Map<string, string>();
-  private readonly strings = new Set<string>();
+  private readonly dates = new Set<string>();
   private readonly numbers = new Set<number>(VOCABULARY_NUMBERS);
+  /** IDs the user typed: an answer may say they were not found, but cite them nowhere else. */
+  private readonly askedIds: Set<string>;
 
-  constructor(question: string) {
-    for (const n of question.match(NUMBER) ?? []) this.numbers.add(toNumber(n));
+  constructor(question: string, today: string) {
+    this.dates.add(today);
+    this.askedIds = new Set(question.toUpperCase().match(ID_IN_TEXT) ?? []);
   }
 
-  add(value: unknown): void {
+  add(value: unknown, field?: string): void {
     if (typeof value === 'number') {
       this.numbers.add(value);
     } else if (typeof value === 'string') {
-      this.addString(value);
+      for (const d of value.match(DATE) ?? []) this.dates.add(d);
+      if (field && ID_FIELDS.has(field)) this.addId(value);
     } else if (Array.isArray(value)) {
-      value.forEach((v) => this.add(v));
+      value.forEach((v) => this.add(v, field));
     } else if (value && typeof value === 'object') {
       const obj = value as Record<string, unknown>;
-      // Stock positions are cited as SKU@warehouse.
+      // Stock positions are cited as SKU@warehouse; the warehouse name is import-restricted.
       const wh = (obj.importedText as Record<string, unknown> | undefined)?.warehouse;
       if (typeof obj.sku === 'string' && typeof wh === 'string') this.addId(`${obj.sku}@${wh}`);
-      Object.values(obj).forEach((v) => this.add(v));
+      for (const [k, v] of Object.entries(obj)) if (k !== 'importedText') this.add(v, k);
     }
-  }
-
-  private addString(s: string): void {
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-      this.strings.add(s.slice(0, 10));
-      return;
-    }
-    if (s.length <= 160) this.addId(s);
-    // Risk IDs embed their entity key (shipment ID or SKU@warehouse).
-    const key = /^[A-Z_]+:(.+)$/.exec(s)?.[1];
-    if (key) this.addId(key);
-    for (const n of s.replace(ID_IN_TEXT, ' ').match(NUMBER) ?? []) this.numbers.add(toNumber(n));
   }
 
   private addId(id: string): void {
     if (!this.ids.has(id.toUpperCase())) this.ids.set(id.toUpperCase(), id);
+    // Risk IDs embed their entity key (shipment ID or SKU@warehouse).
+    const key = /^[A-Z_]+:(.+)$/.exec(id)?.[1];
+    if (key && !this.ids.has(key.toUpperCase())) this.ids.set(key.toUpperCase(), key);
   }
 
   /** Validates and normalises the model's answer; throws AnswerRejected on any unsupported claim. */
@@ -247,7 +260,7 @@ class Evidence {
         evidence: this.text(raw.evidence),
       };
     });
-    const unknowns = list(args.unknowns, LIMITS.unknowns).map((u) => this.text(u)).filter((u) => u !== '');
+    const unknowns = list(args.unknowns, LIMITS.unknowns).map((u) => this.text(u, true)).filter((u) => u !== '');
     if (facts.length + recommendations.length + unknowns.length === 0) throw new AnswerRejected('the AI returned an empty answer');
     return { intent, facts, recommendations, unknowns };
   }
@@ -258,21 +271,21 @@ class Evidence {
     if (!text) throw new AnswerRejected('the AI returned an empty statement');
     const ids = list(raw.ids, LIMITS.ids).map((id) => {
       const canonical = typeof id === 'string' ? this.ids.get(id.trim().toUpperCase()) : undefined;
-      if (!canonical) throw new AnswerRejected(UNVERIFIED, `id ${String(id).slice(0, 80)}`);
+      if (!canonical) throw new AnswerRejected(UNVERIFIED, `id ${String(id)}`);
       return canonical;
     });
     return { text, ids: [...new Set(ids)] };
   }
 
   /** Cleans model text and checks every ID, date and number it mentions. */
-  private text(value: unknown): string {
+  private text(value: unknown, allowAskedIds = false): string {
     const text = cleanUntrusted(typeof value === 'string' ? value : '', MAX_STATEMENT) ?? '';
     for (const date of text.match(DATE) ?? []) {
-      if (!this.strings.has(date)) throw new AnswerRejected(UNVERIFIED, `date ${date}`);
+      if (!this.dates.has(date)) throw new AnswerRejected(UNVERIFIED, `date ${date}`);
     }
     const withoutDates = text.replace(DATE, ' ');
     for (const id of withoutDates.match(ID_IN_TEXT) ?? []) {
-      if (!this.ids.has(id.toUpperCase())) throw new AnswerRejected(UNVERIFIED, `id in text ${id}`);
+      if (!this.ids.has(id) && !(allowAskedIds && this.askedIds.has(id))) throw new AnswerRejected(UNVERIFIED, `id in text ${id}`);
     }
     for (const n of withoutDates.replace(ID_IN_TEXT, ' ').match(NUMBER) ?? []) {
       if (!this.numbers.has(toNumber(n))) throw new AnswerRejected(UNVERIFIED, `number ${n}`);

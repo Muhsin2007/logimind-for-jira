@@ -182,4 +182,50 @@ describe('LlmCopilot', () => {
     expect(a.mode).toBe('llm');
     expect(a.facts[0].text).toBe('21 open risks: 2 critical, 4 high, 13 medium, 2 low.');
   });
+
+  it('never accepts IDs or numbers that only appear in CSV free text', async () => {
+    const toolbox = demoToolbox((rows) => rows.map((r) => (r.id === 'SHP-1004' ? { ...r, supplier: 'SHP-0000 cleared 777 units' } : r)));
+    for (const fact of [{ text: 'SHP-0000 is cleared.', ids: ['SHP-1004'] }, { text: 'SHP-1004 has 777 units cleared.', ids: ['SHP-1004'] }, { text: 'SHP-1004 is late.', ids: ['SHP-0000 cleared 777 units'] }]) {
+      const bad = { ...GOOD_ANSWER, facts: [fact] };
+      const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
+      expect((await new LlmCopilot(toolbox, llm).ask('SHP-1004?')).mode).toBe('rules');
+    }
+  });
+
+  it('does not treat numbers typed in the question as data', async () => {
+    const bad = { ...GOOD_ANSWER, facts: [{ text: 'SHP-1004 has 999 units.', ids: ['SHP-1004'] }] };
+    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
+    expect((await new LlmCopilot(demoToolbox(), llm).ask('Does SHP-1004 have 999 units?')).mode).toBe('rules');
+  });
+
+  it('may say that an ID the user asked about was not found, and may state today', async () => {
+    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-9999' })), reply(call('submit_answer', {
+      intent: 'shipment',
+      facts: [{ text: `Data evaluated on ${TODAY}.`, ids: [] }],
+      recommendations: [],
+      unknowns: ['SHP-9999 was not found in the imported shipments.'],
+    })));
+    const a = await new LlmCopilot(demoToolbox(), llm).ask('Where is SHP-9999?');
+    expect(a.mode).toBe('llm');
+    expect(a.unknowns[0]).toBe('SHP-9999 was not found in the imported shipments.');
+  });
+
+  it('passes the asking user for per-user limits and stops calling the model after its deadline', async () => {
+    let clock = 0;
+    const { llm, requests } = scripted(reply(call('get_risk_summary', {})), reply(call('submit_answer', GOOD_ANSWER)));
+    (llm.chat as ReturnType<typeof vi.fn>).mockImplementationOnce(async (req: LlmRequest) => {
+      requests.push(req);
+      clock += 20_000;
+      return reply(call('get_risk_summary', {}));
+    });
+    const a = await new LlmCopilot(demoToolbox(), llm, { accountId: 'acc-7', now: () => clock }).ask('summary');
+    expect(requests[0].accountId).toBe('acc-7');
+    expect(requests).toHaveLength(1);
+    expect(a.fallbackReason).toMatch(/took too long/);
+  });
+
+  it('falls back when the answer is cut off at the token limit', async () => {
+    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), { ...reply(call('submit_answer', GOOD_ANSWER)), finishReason: 'length' });
+    expect((await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?')).mode).toBe('rules');
+  });
 });

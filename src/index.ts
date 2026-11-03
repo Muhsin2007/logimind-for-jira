@@ -6,7 +6,6 @@ import { LlmCopilot } from './copilot/llm-copilot';
 import { MAX_QUESTION } from './copilot/rule-based-copilot';
 import { ServiceToolbox } from './copilot/tools';
 import { MAX_COLUMNS } from './domain/column-mapping';
-import type { ImportKind } from './domain/types';
 import { ForgeJiraGateway } from './jira/forge-jira-gateway';
 import { ForgeLlm } from './llm/forge-llm';
 import { IssueService, ISSUE_ID } from './services/issue-service';
@@ -51,8 +50,8 @@ resolver.define('listImports', () => logistics.listImports());
 resolver.define('listIssueLinks', () => issues.listLinks());
 // The Forge LLM answers through the read-only toolbox; unverifiable answers or an unavailable
 // model fall back to the rule-based copilot. A fresh toolbox per request reads the data once.
-resolver.define('askCopilot', ({ payload }) =>
-  new LlmCopilot(new ServiceToolbox(logistics, issues), llm).ask(requireString(payload, 'question', MAX_QUESTION)),
+resolver.define('askCopilot', ({ payload, context }) =>
+  new LlmCopilot(new ServiceToolbox(logistics, issues), llm, { accountId: accountOf(context) }).ask(requireString(payload, 'question', MAX_QUESTION)),
 );
 
 // Issue creation runs as the user, so Jira's own project permissions decide who may create.
@@ -88,7 +87,7 @@ resolver.define('importCsvWithMapping', async ({ payload, context }) => {
   if (kind !== 'shipments' && kind !== 'inventory') throw new Error('Invalid request: "kind" must be shipments or inventory');
   const mapping = requireMapping(payload);
   await requireDataManager();
-  return logistics.importCsvWithMapping(filename, content, kind as ImportKind, mapping, accountOf(context));
+  return logistics.importCsvWithMapping(filename, content, kind, mapping, accountOf(context));
 });
 resolver.define('loadDemoData', async ({ context }) => {
   await requireDataManager();
