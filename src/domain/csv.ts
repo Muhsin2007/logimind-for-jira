@@ -6,12 +6,32 @@ export interface CsvTable {
 
 export class CsvParseError extends Error {}
 
+export type Delimiter = ',' | ';';
+
 /**
- * Minimal RFC 4180 parser: comma separated, double-quoted fields, `""` escapes,
- * CRLF or LF line endings. Blank lines are skipped. A leading BOM is ignored.
+ * Excel in many locales exports CSV with semicolons. The header decides: semicolons win only
+ * when the header (outside quotes) has more of them than commas.
  */
-export function parseCsv(text: string): CsvTable {
+export function detectDelimiter(text: string): Delimiter {
+  let commas = 0;
+  let semicolons = 0;
+  let inQuotes = false;
+  for (const ch of text) {
+    if (ch === '"') inQuotes = !inQuotes;
+    else if (!inQuotes && (ch === '\n' || ch === '\r')) break;
+    else if (!inQuotes && ch === ',') commas++;
+    else if (!inQuotes && ch === ';') semicolons++;
+  }
+  return semicolons > commas ? ';' : ',';
+}
+
+/**
+ * Minimal RFC 4180 parser: comma (or, for Excel exports, semicolon) separated, double-quoted
+ * fields, `""` escapes, CRLF or LF line endings. Blank lines are skipped. A leading BOM is ignored.
+ */
+export function parseCsv(text: string, opts: { keepHeaderCase?: boolean } = {}): CsvTable {
   const input = text.replace(/^﻿/, '');
+  const delimiter = detectDelimiter(input);
   const records: { line: number; cells: string[] }[] = [];
   let cells: string[] = [];
   let field = '';
@@ -46,7 +66,7 @@ export function parseCsv(text: string): CsvTable {
     }
     if (ch === '"' && field === '') {
       inQuotes = true;
-    } else if (ch === ',') {
+    } else if (ch === delimiter) {
       cells.push(field);
       field = '';
     } else if (ch === '\n' || ch === '\r') {
@@ -64,7 +84,7 @@ export function parseCsv(text: string): CsvTable {
   if (records.length === 0) throw new CsvParseError('File is empty');
   const [headerRecord, ...rows] = records;
   return {
-    header: headerRecord.cells.map((h) => h.trim().toLowerCase()),
+    header: headerRecord.cells.map((h) => (opts.keepHeaderCase ? h.trim() : h.trim().toLowerCase())),
     rows,
   };
 }

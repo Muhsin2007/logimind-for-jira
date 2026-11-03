@@ -1,13 +1,24 @@
 import { useRef, useState } from 'react';
-import { call, errorMessage, useAsync, type ImportOutcome } from '../api';
+import { call, errorMessage, useAsync, type ImportKind, type ImportOutcome, type MappingProposal } from '../api';
 import { ErrorState, Loading, Panel } from '../components';
 import { fmtDateTime } from '../format';
 import type { NavProps } from '../App';
+import { ColumnMapping } from './ColumnMapping';
 import { JiraSettings } from './JiraSettings';
 
 const MAX_BYTES = 1_000_000;
 
-type Busy = null | 'upload' | 'demo' | 'clear';
+type Busy = null | 'upload' | 'demo' | 'clear' | 'map';
+
+/** A file whose header was not recognised, waiting for the admin to confirm a column mapping. */
+interface PendingMapping {
+  filename: string;
+  content: string;
+  proposal: Extract<MappingProposal, { ok: true }>;
+}
+
+/** Header problems (unknown, missing or duplicate columns) can be fixed by mapping columns. */
+const isHeaderProblem = (o: ImportOutcome) => !o.ok && o.errors.length > 0 && o.errors.every((e) => e.line === 1 && e.field === null);
 
 export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const history = useAsync(() => call('listImports'), [dataVersion]);
@@ -19,6 +30,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
   const [outcomes, setOutcomes] = useState<{ filename: string; outcome: ImportOutcome }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [pending, setPending] = useState<PendingMapping[]>([]);
 
   const run = async (kind: Busy, action: () => Promise<void>) => {
     setBusy(kind);
@@ -37,25 +49,44 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
     if (!files || files.length === 0) return;
     void run('upload', async () => {
       const results: { filename: string; outcome: ImportOutcome }[] = [];
+      const mappings: PendingMapping[] = [];
       for (const file of Array.from(files)) {
         if (file.size > MAX_BYTES) {
           results.push({ filename: file.name, outcome: { ok: false, errors: [{ line: 0, field: null, message: 'File is larger than 1 MB' }] } });
           continue;
         }
         const content = await file.text();
-        results.push({ filename: file.name, outcome: await call('importCsv', { filename: file.name, content }) });
+        const outcome = await call('importCsv', { filename: file.name, content });
+        if (isHeaderProblem(outcome)) {
+          // Ask for a column mapping (AI-proposed when names do not match) instead of failing the file.
+          const proposal = await call('proposeColumnMapping', { filename: file.name, content });
+          if (proposal.ok) {
+            mappings.push({ filename: file.name, content, proposal });
+            continue;
+          }
+        }
+        results.push({ filename: file.name, outcome });
       }
       setOutcomes(results);
+      setPending(mappings);
       if (fileInput.current) fileInput.current.value = '';
     });
   };
+
+  const confirmMapping = (item: PendingMapping, kind: ImportKind, mapping: (string | null)[]) =>
+    void run('map', async () => {
+      const outcome = await call('importCsvWithMapping', { filename: item.filename, content: item.content, kind, mapping });
+      setOutcomes((o) => [...o, { filename: item.filename, outcome }]);
+      setPending((p) => p.filter((x) => x !== item));
+    });
 
   return (
     <div className="stack">
       <Panel title="Import CSV">
         <p>
-          Upload a <strong>shipments</strong> or <strong>inventory</strong> CSV (UTF-8, max 1 MB). The file type is detected from its
-          header. Each import <strong>replaces</strong> the current dataset of that type; rows that fail validation are rejected and listed
+          Upload a <strong>shipments</strong> or <strong>inventory</strong> CSV (UTF-8, comma or semicolon separated as exported by Excel,
+          max 1 MB). The file type is detected from its header; if your supplier uses other column names, AI proposes a column mapping for
+          you to confirm. Each import <strong>replaces</strong> the current dataset of that type; rows that fail validation are rejected and listed
           below, never silently used.
         </p>
         {access.status === 'ready' && !canManage && (
@@ -72,9 +103,19 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
             disabled={busy !== null || !canManage}
             onChange={(e) => upload(e.target.files)}
           />
-          {busy === 'upload' && <span className="muted">Importing…</span>}
+          {busy === 'upload' && <span className="muted">Importing… (unrecognised columns are mapped with AI)</span>}
         </div>
         {error && <p role="alert" className="text-danger">{error}</p>}
+        {pending.map((item) => (
+          <ColumnMapping
+            key={item.filename}
+            filename={item.filename}
+            proposal={item.proposal}
+            busy={busy !== null}
+            onConfirm={(kind, mapping) => confirmMapping(item, kind, mapping)}
+            onCancel={() => setPending((p) => p.filter((x) => x !== item))}
+          />
+        ))}
         <div aria-live="polite">
           {outcomes.map(({ filename, outcome }, i) => (
             <ImportResult key={`${i}-${filename}`} filename={filename} outcome={outcome} />

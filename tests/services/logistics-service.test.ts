@@ -54,6 +54,20 @@ describe('LogisticsService.importCsv', () => {
     expect(repo.saveImportBatch).not.toHaveBeenCalled();
   });
 
+  it('imports a file under a confirmed column mapping, validating every row as usual', async () => {
+    const csv = 'Ref;Vendor;Item;Units;Due;State;Site\nA-1;Acme;S-1;3;2026-11-04;In transit;W\nA-2;Acme;S-1;x;2026-11-04;planned;W\n';
+    const mapping = ['shipment_id', 'supplier', 'sku', 'qty', 'planned_arrival', 'status', 'warehouse'];
+    const out = await service.importCsvWithMapping('supplier.csv', csv, 'shipments', mapping, 'acc-1');
+    expect(out).toMatchObject({ ok: true, replaced: true, batch: { kind: 'shipments', filename: 'supplier.csv', rowsValid: 1, rowsRejected: 1 } });
+    expect(repo.replaceShipments).toHaveBeenCalledWith([expect.objectContaining({ id: 'A-1', status: 'in_transit', qty: 3 })]);
+  });
+
+  it('rejects an invalid mapping before touching storage', async () => {
+    const out = await service.importCsvWithMapping('s.csv', 'a,b\n1,2\n', 'inventory', ['sku', 'shipment_id'], null);
+    expect(out).toMatchObject({ ok: false, errors: [expect.objectContaining({ line: 1, message: expect.stringMatching(/not an inventory column/) }), expect.anything()] });
+    expect(repo.withWriteLock).not.toHaveBeenCalled();
+  });
+
   it('propagates storage failures', async () => {
     repo.replaceShipments.mockRejectedValue(new Error('Storage write failed'));
     await expect(service.importCsv('s.csv', `${HEADER}\nSHP-1,A,S,1,2026-11-04,,planned,W`, null)).rejects.toThrow('Storage write failed');

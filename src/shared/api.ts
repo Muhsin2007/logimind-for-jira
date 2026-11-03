@@ -2,8 +2,10 @@
  * Resolver contract shared by the Forge backend and the Custom UI (imported as types only).
  * Resolver names are the keys of `ResolverApi`.
  */
+import type { FieldSpec } from '../domain/column-mapping';
 import type {
   ImportBatch,
+  ImportKind,
   InventoryItem,
   IssueLink,
   IssueStatus,
@@ -16,7 +18,7 @@ import type {
   Shipment,
 } from '../domain/types';
 
-export type { ImportBatch, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
+export type { FieldSpec, ImportBatch, ImportKind, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
 
 export interface DashboardData {
   today: IsoDate;
@@ -55,6 +57,36 @@ export interface ImportRequest {
 export type ImportOutcome =
   | { ok: true; batch: ImportBatch; replaced: boolean }
   | { ok: false; errors: RowError[] };
+
+/** One column of an uploaded file with the LogiMind field it is mapped to (null = ignored). */
+export interface MappedColumn {
+  index: number;
+  header: string;
+  /** First values of the column, cleaned and capped, so the person can check the mapping. */
+  samples: string[];
+  field: string | null;
+}
+
+export type MappingProposal =
+  | {
+      ok: true;
+      kind: ImportKind;
+      /** 'ai' = proposed by the Forge LLM; 'name' = matched by column name only. */
+      source: 'ai' | 'name';
+      /** Set when AI mapping was wanted but could not be used. */
+      notice: string | null;
+      rowCount: number;
+      columns: MappedColumn[];
+      missingRequired: string[];
+      schema: Record<ImportKind, FieldSpec[]>;
+    }
+  | { ok: false; message: string };
+
+export interface MappedImportRequest extends ImportRequest {
+  kind: ImportKind;
+  /** One target field (or null to ignore) per column, in file order. */
+  mapping: (string | null)[];
+}
 
 /** A link as shown to viewers: current key, live status, and no creator account ID. */
 export interface IssueLinkView extends Omit<IssueLink, 'createdBy'> {
@@ -102,8 +134,10 @@ export interface CopilotRecommendation extends CitedStatement {
 export type CopilotIntent = 'risk_summary' | 'shipment' | 'inventory' | 'help';
 
 export interface CopilotAnswer {
-  /** 'rules' = deterministic answers from the data; no AI model was involved. */
+  /** 'rules' = deterministic answers from the data; 'llm' = written by the Forge LLM from read-only tool results, every cited ID checked. */
   mode: 'rules' | 'llm';
+  /** Set when an AI answer was attempted but the rule-based answer is shown instead. */
+  fallbackReason?: string;
   intent: CopilotIntent;
   question: string;
   facts: CitedStatement[];
@@ -122,6 +156,8 @@ export interface ResolverApi {
   listRisks: { payload: void; result: { today: IsoDate; risks: RiskEvent[] } };
   listImports: { payload: void; result: ImportBatch[] };
   importCsv: { payload: ImportRequest; result: ImportOutcome };
+  proposeColumnMapping: { payload: ImportRequest; result: MappingProposal };
+  importCsvWithMapping: { payload: MappedImportRequest; result: ImportOutcome };
   loadDemoData: { payload: void; result: ImportOutcome[] };
   clearData: { payload: void; result: { cleared: true } };
   listIssueLinks: { payload: void; result: IssueLinksData };

@@ -23,8 +23,8 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,63}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001F\u007F]/g;
 
-const SHIPMENT_REQUIRED = ['shipment_id', 'supplier', 'sku', 'qty', 'planned_arrival', 'status', 'warehouse'];
-const INVENTORY_REQUIRED = ['sku', 'warehouse', 'on_hand', 'safety_stock'];
+export const SHIPMENT_REQUIRED = ['shipment_id', 'supplier', 'sku', 'qty', 'planned_arrival', 'status', 'warehouse'];
+export const INVENTORY_REQUIRED = ['sku', 'warehouse', 'on_hand', 'safety_stock'];
 
 export type ImportResult =
   | { ok: true; kind: 'shipments'; records: Shipment[]; rowsTotal: number; errors: RowError[] }

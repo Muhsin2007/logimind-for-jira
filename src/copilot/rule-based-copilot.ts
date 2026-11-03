@@ -158,7 +158,8 @@ function stockFact(row: InventoryRow): string {
   return `${row.sku} at ${row.warehouse}: ${row.onHand} on hand, ${row.reserved} reserved, ${row.available} available, ${row.inboundSoon} inbound within 7 days, safety stock ${row.safetyStock}.`;
 }
 
-function staleness(f: DataFreshness): string[] {
+/** Missing or stale imports, stated deterministically (shared with the AI copilot). */
+export function staleness(f: DataFreshness): string[] {
   const out: string[] = [];
   const check = (label: string, at: string | null, hasData: boolean) => {
     if (!at) {

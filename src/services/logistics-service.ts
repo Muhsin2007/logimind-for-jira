@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { todayUtc } from '../domain/dates';
 import { demoInventoryCsv, demoShipmentsCsv } from '../domain/demo-data';
+import { applyMapping, previewColumns, validateMapping } from '../domain/column-mapping';
 import { importCsv } from '../domain/importer';
 import { computeKpis } from '../domain/kpis';
 import { buildInboundIndex, evaluateRisks, inventoryEntityKey, stockPosition, type InboundIndex } from '../domain/risk-engine';
-import { SEVERITIES, type ImportBatch, type InventoryItem, type IsoDate, type RiskEvent, type Shipment } from '../domain/types';
+import { SEVERITIES, type ImportBatch, type ImportKind, type InventoryItem, type IsoDate, type RiskEvent, type Shipment } from '../domain/types';
 import type { DashboardData, ImportOutcome, InventoryRow, ShipmentDetail, ShipmentRow } from '../shared/api';
 import type { LogisticsRepository } from '../storage/repository';
 
@@ -113,6 +114,21 @@ export class LogisticsService {
    */
   importCsv(filename: string, content: string, importedBy: string | null): Promise<ImportOutcome> {
     return this.repo.withWriteLock(() => this.importUnlocked(filename, content, importedBy));
+  }
+
+  /**
+   * Imports a file whose header was mapped by the person (optionally from an AI proposal).
+   * Only the header is rewritten; every row then goes through the same validation.
+   */
+  async importCsvWithMapping(filename: string, content: string, kind: ImportKind, mapping: (string | null)[], importedBy: string | null): Promise<ImportOutcome> {
+    if (content.length > MAX_CSV_CHARS) {
+      return { ok: false, errors: [{ line: 0, field: null, message: `File is too large (limit ${MAX_CSV_CHARS / 1_000_000} MB)` }] };
+    }
+    const preview = previewColumns(content);
+    if ('error' in preview) return { ok: false, errors: [{ line: 0, field: null, message: preview.error }] };
+    const problems = validateMapping(kind, preview.columns.length, mapping);
+    if (problems.length > 0) return { ok: false, errors: problems.map((message) => ({ line: 1, field: null, message })) };
+    return this.importCsv(filename, applyMapping(content, mapping), importedBy);
   }
 
   loadDemoData(importedBy: string | null): Promise<ImportOutcome[]> {
