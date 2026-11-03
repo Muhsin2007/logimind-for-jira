@@ -1,0 +1,10 @@
+shipment_id,order_id,supplier,sku,product_name,qty,planned_arrival,eta,actual_arrival,status,warehouse,carrier
+QA-001,PO-901,NorthStar Parts,SKU-01,Brake pads (front),40,2026-10-20,,,in_transit,Tashkent,Caspian Freight
+QA-002,PO-902,,SKU-02,Air filter,10,2026-11-10,2026-11-12,,confirmed,Tashkent,SilkWay Cargo
+QA-003,PO-903,MetroParts,SKU-03,Oil filter,25,2026-02-30,,,planned,Tashkent,Steppe Line
+QA-004,PO-904,MetroParts,SKU-03,Oil filter,-5,2026-11-15,,,planned,Tashkent,Steppe Line
+QA-005,PO-905,Altai Components,SKU-04,Spark plug set,60,2026-11-08,,,teleported,Samarkand,Steppe Line
+QA-001,PO-906,NorthStar Parts,SKU-01,Brake pads (front),20,2026-11-20,,,planned,Tashkent,Caspian Freight
+QA-006,PO-907,Acme, Inc,SKU-05,Timing belt,5,2026-11-09,,,planned,Tashkent,Caspian Freight
+QA-007,PO-908,Silk Road Motors,SKU-06,Wiper blades,100,2026-11-01,,,delivered,Tashkent,SilkWay Cargo
+QA-008,PO-909,Silk Road Motors,SKU-06,Wiper blades,100,2026-11-12,2026-11-15,,in_transit,Samarkand,SilkWay Cargo

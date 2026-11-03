@@ -199,6 +199,8 @@ class Row {
 }
 
 function toShipment(r: Row): Shipment | { errors: RowError[] } {
+  // A column-count error means every later field is shifted; report only the cause.
+  if (r.errors.length > 0) return { errors: r.errors };
   const s = {
     id: r.id('shipment_id', true),
     orderId: r.id('order_id', false),
@@ -222,6 +224,7 @@ function toShipment(r: Row): Shipment | { errors: RowError[] } {
 }
 
 function toInventory(r: Row): InventoryItem | { errors: RowError[] } {
+  if (r.errors.length > 0) return { errors: r.errors };
   const item = {
     sku: r.id('sku', true),
     productName: r.text('product_name', false),
