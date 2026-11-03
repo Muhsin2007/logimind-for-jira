@@ -34,6 +34,17 @@ Last updated: 2026-11-02 (Phase 2). Reviewer: `ecc:security-reviewer`, plus `ecc
 | 16 | Info | JQL / markup injection | Not exploitable — only numeric IDs reach JQL; CSV values are ADF text nodes |
 | 17 | Info | Who may create issues | Any page viewer, but only once per active risk and only where Jira lets *them* create (asUser) |
 
+## Phase 5 additions (Rovo agent)
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 18 | High | Warehouse text embedded in LOW_STOCK risk IDs reached the agent unsanitised (indirect prompt injection) | **Fixed** — IDs cleaned in DTOs; warehouse names restricted at import; prompt treats IDs as opaque |
+| 19 | Medium | Zero-width / bidi characters in CSV text | **Fixed** — stripped by `cleanText` |
+| 20 | Medium | Model-supplied `riskId` echoed back into model context | **Fixed** — not echoed |
+| 21 | Medium | Issue key returned for issues the user cannot see | **Fixed** — key only when the live (asUser) status is visible |
+| 22 | Info | Agent actions | All `GET`, no write tools; inputs validated; failures never fall back to memory |
+| 23 | Info | Data scope | Logistics data is app-wide: any page/agent user on the site can read it (by design) |
+
 ## Known limitations (accepted for now)
 - "Today" is evaluated in UTC, so users far from UTC may see a risk change day a few hours early or late.
 - A file where most rows are invalid still replaces the dataset with its valid rows; the import result lists every rejected row.

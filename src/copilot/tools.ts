@@ -1,5 +1,5 @@
 import { locationKey } from '../domain/risk-engine';
-import type { ImportBatch, IsoDate, RiskEvent, Severity } from '../domain/types';
+import type { ImportBatch, IsoDate, RiskEvent, RiskType, Severity } from '../domain/types';
 import type { InventoryRow, IssueLinksData, IssueLinkView, ShipmentDetail, ShipmentRow } from '../shared/api';
 import type { IssueService } from '../services/issue-service';
 import type { LogisticsService } from '../services/logistics-service';
@@ -7,6 +7,8 @@ import type { LogisticsService } from '../services/logistics-service';
 export interface RiskSummary {
   today: IsoDate;
   total: number;
+  /** Risks matching the filter (before the top-N cap). */
+  matching: number;
   bySeverity: Record<Severity, number>;
   /** Highest-priority risks first, capped. */
   top: RiskEvent[];
@@ -26,7 +28,7 @@ export interface DataFreshness {
  * comes from stored, validated data; nothing here can create, change or delete anything.
  */
 export interface CopilotToolbox {
-  getRiskSummary(filter?: { severity?: Severity; limit?: number }): Promise<RiskSummary>;
+  getRiskSummary(filter?: { severity?: Severity; type?: RiskType; limit?: number }): Promise<RiskSummary>;
   getShipment(shipmentId: string): Promise<ShipmentDetail | null>;
   getInventory(sku: string, warehouse?: string): Promise<InventoryRow[]>;
   getLinkedJiraIssue(riskId: string): Promise<IssueLinkView | null>;
@@ -63,13 +65,13 @@ export class ServiceToolbox implements CopilotToolbox {
     return (this.links ??= this.issues.listLinks().catch((err: unknown) => ({ error: err instanceof Error ? err.message : 'Jira links unavailable' })));
   }
 
-  async getRiskSummary(filter: { severity?: Severity; limit?: number } = {}): Promise<RiskSummary> {
+  async getRiskSummary(filter: { severity?: Severity; type?: RiskType; limit?: number } = {}): Promise<RiskSummary> {
     const { today, risks } = await this.overview();
     const bySeverity: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
     for (const r of risks) bySeverity[r.severity]++;
-    const selected = filter.severity ? risks.filter((r) => r.severity === filter.severity) : risks;
+    const selected = risks.filter((r) => (!filter.severity || r.severity === filter.severity) && (!filter.type || r.type === filter.type));
     const limit = Math.min(Math.max(Math.trunc(filter.limit ?? MAX_TOP), 1), MAX_TOP);
-    return { today, total: risks.length, bySeverity, top: selected.slice(0, limit) };
+    return { today, total: risks.length, matching: selected.length, bySeverity, top: selected.slice(0, limit) };
   }
 
   async getShipment(shipmentId: string): Promise<ShipmentDetail | null> {

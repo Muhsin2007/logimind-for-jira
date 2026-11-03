@@ -37,7 +37,7 @@ describe('Rovo actions', () => {
       found: true,
       notice: DATA_NOTICE,
       shipment: { shipmentId: 'SHP-1004', qty: 150, status: 'customs', importedText: { supplier: 'Altai Components', warehouse: 'Samarkand' } },
-      risks: [{ riskId: 'LATE_SHIPMENT:SHP-1004', severity: 'critical', evidence: { 'Days late': 9 }, linkedJiraIssue: { issueKey: 'SCRUM-5', status: 'To Do' } }],
+      risks: [{ riskId: 'LATE_SHIPMENT:SHP-1004', severity: 'critical', evidence: { 'Days late': 9 }, linkedJiraIssue: { issueKey: 'SCRUM-5', status: 'To Do', statusCategory: 'new' } }],
       destinationStock: { available: 0, stockRiskId: 'LOW_STOCK:SKU-04@Samarkand' },
       missing: [],
     });
@@ -65,18 +65,38 @@ describe('Rovo actions', () => {
 
   it('get-risk-summary validates severity and clamps the limit', async () => {
     const all = await getRiskSummary(demoTools(), {});
-    expect(all).toMatchObject({ totalOpenRisks: 21, bySeverity: { critical: 2 }, filter: 'all', note: 'Only the 5 most severe of 21 risks are included.' });
+    expect(all).toMatchObject({ totalOpenRisks: 21, matchingRisks: 21, bySeverity: { critical: 2 }, note: 'Only the 5 most severe of 21 matching risks are included.' });
     const crit = (await getRiskSummary(demoTools(), { severity: 'CRITICAL', limit: 50 })) as { topRisks: { severity: string }[] };
     expect(crit.topRisks.map((r) => r.severity)).toEqual(['critical', 'critical']);
     expect(await getRiskSummary(demoTools(), { severity: 'urgent' })).toMatchObject({ ok: false });
+    expect(await getRiskSummary(demoTools(), { riskType: 'PANIC' })).toMatchObject({ ok: false });
+  });
+
+  it('lists SKUs below safety stock with the LOW_STOCK filter', async () => {
+    const low = (await getRiskSummary(demoTools(), { riskType: 'low_stock', limit: 10 })) as { matchingRisks: number; topRisks: { type: string }[] };
+    expect(low.matchingRisks).toBe(4);
+    expect(new Set(low.topRisks.map((r) => r.type))).toEqual(new Set(['LOW_STOCK']));
   });
 
   it('get-inventory and get-linked-jira-issue answer from stored data', async () => {
     const inv = (await getInventory(demoTools(), { sku: 'SKU-10', warehouse: 'samarkand' })) as { positions: { available: number; risk: { severity: string } }[] };
     expect(inv.positions).toHaveLength(1);
     expect(inv.positions[0]).toMatchObject({ available: 100, risk: { severity: 'medium' } });
-    expect(await getLinkedJiraIssue(demoTools(), { riskId: 'LATE_SHIPMENT:SHP-1004' })).toMatchObject({ found: true, issueKey: 'SCRUM-5' });
-    expect(await getLinkedJiraIssue(demoTools(), { riskId: 'ETA_SLIP:SHP-1011' })).toMatchObject({ found: false });
+    expect(await getLinkedJiraIssue(demoTools(), { riskId: 'LATE_SHIPMENT:SHP-1004' })).toMatchObject({ found: true, issue: { issueKey: 'SCRUM-5' } });
+    const none = await getLinkedJiraIssue(demoTools(), { riskId: 'ETA_SLIP:SHP-1011' });
+    expect(none).toMatchObject({ found: false, message: 'No Jira issue has been created for that risk.' });
+  });
+
+  it('never names an issue the user cannot see', async () => {
+    const tools = demoTools();
+    vi.spyOn(tools, 'getLinkedJiraIssue').mockResolvedValue({ riskId: 'LATE_SHIPMENT:SHP-1004', issueKey: 'SECRET-1', status: null } as never);
+    const out = await getLinkedJiraIssue(tools, { riskId: 'LATE_SHIPMENT:SHP-1004' });
+    expect(out).toMatchObject({ found: true, issue: { exists: true, visibleToYou: false } });
+    expect(JSON.stringify(out)).not.toContain('SECRET-1');
+  });
+
+  it('strips zero-width and bidi characters from imported text', () => {
+    expect(cleanText('Acme​‮evil⁦')).toBe('Acme evil');
   });
 
   it('turns failures into an explicit "data unavailable" answer', async () => {

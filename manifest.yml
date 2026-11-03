@@ -32,13 +32,18 @@ modules:
       name: Get logistics risk summary
       function: agentRiskSummary
       actionVerb: GET
-      description: Returns open logistics risks from LogiMind's deterministic rules, with counts by severity and the most severe risks (risk IDs, types, numeric evidence) and the data date.
+      description: Returns open logistics risks from LogiMind's deterministic rules - counts by severity and the most severe matching risks (risk IDs, types, numeric evidence) with the data date. Use riskType LOW_STOCK to list SKUs below safety stock.
       inputs:
         severity:
           title: Severity
           type: string
           required: false
           description: Optional filter - critical, high, medium or low.
+        riskType:
+          title: Risk type
+          type: string
+          required: false
+          description: Optional filter - LATE_SHIPMENT, ETA_SLIP, MISSING_ETA or LOW_STOCK.
         limit:
           title: Number of risks
           type: integer
@@ -75,13 +80,13 @@ modules:
       name: Get linked Jira issue
       function: agentLinkedIssue
       actionVerb: GET
-      description: Returns the Jira issue key and current status created from a LogiMind risk, if one exists.
+      description: Returns the Jira issue created from a LogiMind risk and its current status, if one exists and the user can see it. Only use a riskId returned by another LogiMind action.
       inputs:
         riskId:
           title: Risk ID
           type: string
           required: true
-          description: A risk ID returned by another LogiMind action, e.g. LATE_SHIPMENT:SHP-1004.
+          description: A risk ID exactly as returned by another LogiMind action, e.g. LATE_SHIPMENT:SHP-1004.
   function:
     - key: resolver
       handler: index.handler

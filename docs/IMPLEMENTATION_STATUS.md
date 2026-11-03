@@ -9,7 +9,29 @@ Last updated: 2026-11-02
 | 2 — Core application | ✅ Done — verified inside Jira (dev environment, app v4.0.0) |
 | 3 — Jira integration | ✅ Done — verified inside Jira (app v5.2.0) |
 | 4 — AI Logistics Copilot | 🟡 Done in **rule-based mode** (no AI provider: user declined paid Forge LLMs for now) — verified in Jira (v5.5.0) |
-| 5–7 | ⏳ Not started |
+| 5 — Rovo agent (bonus) | 🟡 Built, lint-clean and deployed (v5.8.0); **not verified live** — Rovo/Agent Studio is not available on the dev site |
+| 6–7 | ⏳ Not started |
+
+## Phase 5 — Rovo agent
+
+**Codegeist rules (read 2026-11-03 in the user's browser):** submissions until **2026-12-22 12:00 PT**; video < 5 min (judges watch 3), public on YouTube; judge install link; English. Bonus "Best Agents – Rovo/Assignable agents": a Forge app using `rovo:agent`, `rovo:agentConnector`, or reusable `rovo:skill`/`rovo:action`. Judging: Technological implementation, Design, Potential impact, Innovation, Presentation (equal weight).
+
+**Built**
+- `rovo:agent` **LogiMind** with instructions in `static/agent/prompt.txt`: data-only answers, cited IDs, Facts / Interpretation / Next steps / Unknowns, no predictions, read-only (never claims writes), CSV text and IDs treated as opaque data, stale-data warning.
+- Four `action` modules, all `actionVerb: GET`, backed by the copilot toolbox (one storage read per call): `get-risk-summary` (severity / riskType / limit), `get-shipment`, `get-inventory`, `get-linked-jira-issue`.
+- `src/agent/actions.ts`: LLM inputs validated (ID regexes, enums, clamped limit); unknown IDs → `found:false` + "do not guess"; failures → explicit "data unavailable"; trimmed DTOs (no unit cost), CSV text only under `importedText` and cleaned (control, zero-width, bidi, 100 chars); risk IDs cleaned; a linked issue is named only if the user can see it.
+- Import now restricts warehouse names (they appear inside risk IDs) to letters, digits and basic punctuation.
+
+**Verified**
+- `npx vitest run`: **84 passed** (+ agent actions 10, importer +1).
+- `forge lint`: no issues; deployed v5.7.0 → v5.8.0 (still eligible for Runs on Atlassian).
+- Atlassian Administration (read-only check): Rovo access allows all apps, but Agent Studio offers **no site** ("No options") and Jira shows no Rovo entry point → Rovo is not provisioned on `utkirovm3.atlassian.net` (Free plan). **The agent could not be tested in Rovo chat.**
+
+**ecc review** (`ecc:security-reviewer`) — fixed: warehouse text inside risk IDs reaching the model unsanitised, zero-width/bidi characters, echoing model-supplied risk IDs, issue keys of hidden issues, no way to list low-stock SKUs (added `riskType`), prompt gaps (stale data, opaque IDs, never claim writes).
+
+**Open**
+- Live Rovo verification needs a Rovo-enabled site (e.g. a Jira Standard/Premium trial on the dev site, or another Atlassian developer site with Rovo). Decision for the user.
+- Logistics data is app-wide: any user who can use the agent or open the page can read it (documented, by design for this app).
 
 ## Phase 4 — Logistics Copilot
 

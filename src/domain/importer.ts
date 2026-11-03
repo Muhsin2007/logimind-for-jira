@@ -15,8 +15,10 @@ export const MAX_ROWS = 2000;
 export const MAX_NUMBER = 1_000_000_000;
 export const MAX_ERRORS_REPORTED = 200;
 const MAX_TEXT = 200;
-/** Warehouse is part of the inventory storage key, so it is kept short. */
+/** Warehouse is part of the inventory storage key and of risk IDs, so it is kept short. */
 const MAX_WAREHOUSE = 64;
+/** Warehouse names appear inside risk IDs shown to the Rovo agent: letters, digits and basic punctuation only. */
+const WAREHOUSE = /^[\p{L}\p{N}][\p{L}\p{N} .,'()&_/-]*$/u;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,63}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001F\u007F]/g;
@@ -155,6 +157,12 @@ class Row {
     return v.length > maxLen ? this.fail(field, `is longer than ${maxLen} characters`) : v;
   }
 
+  warehouse(field: string): string | null {
+    const v = this.text(field, true, MAX_WAREHOUSE);
+    if (v === null) return null;
+    return WAREHOUSE.test(v) ? v : this.fail(field, 'may only contain letters, digits, spaces and . , \' ( ) & _ / -');
+  }
+
   int(field: string, opts: { required: boolean; min: number; fallback?: number }): number | null {
     const v = this.raw(field);
     if (!v) {
@@ -202,7 +210,7 @@ function toShipment(r: Row): Shipment | { errors: RowError[] } {
     eta: r.date('eta', false),
     actualArrival: r.date('actual_arrival', false),
     status: r.status('status'),
-    warehouse: r.text('warehouse', true, MAX_WAREHOUSE),
+    warehouse: r.warehouse('warehouse'),
     carrier: r.text('carrier', false),
     trackingRef: r.text('tracking_ref', false),
   };
@@ -217,7 +225,7 @@ function toInventory(r: Row): InventoryItem | { errors: RowError[] } {
   const item = {
     sku: r.id('sku', true),
     productName: r.text('product_name', false),
-    warehouse: r.text('warehouse', true, MAX_WAREHOUSE),
+    warehouse: r.warehouse('warehouse'),
     onHand: r.int('on_hand', { required: true, min: 0 }),
     reserved: r.int('reserved', { required: false, min: 0, fallback: 0 }),
     inboundQty: r.int('inbound_qty', { required: false, min: 0, fallback: 0 }),
