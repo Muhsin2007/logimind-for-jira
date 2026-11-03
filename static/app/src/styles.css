@@ -68,6 +68,7 @@ p { margin: 4px 0 8px; }
 .prio-medium { background: var(--sev-medium-subtle); box-shadow: inset 3px 0 0 var(--sev-medium); }
 .prio-low { background: var(--sev-low-subtle); box-shadow: inset 3px 0 0 var(--sev-low); }
 .notice { background: var(--ds-background-information, #e9f2ff); padding: 8px 12px; border-radius: var(--radius); }
+.ai-notice .check { color: var(--text-success); font-weight: 700; }
 .link { border: 0; background: none; padding: 0; color: var(--ds-link, #0c66e4); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .small { font-size: 12px; }
 .wrap { overflow-wrap: anywhere; }
