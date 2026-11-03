@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "LogiMind for Jira — logistics risk copilot (Atlassian Forge app)",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build:ui": "npm --prefix static/app run build",
     "typecheck": "tsc --noEmit",

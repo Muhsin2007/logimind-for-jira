@@ -11,7 +11,7 @@ Last updated: 2026-11-02
 | 4 — AI Logistics Copilot | 🟡 Done in **rule-based mode** (no AI provider: user declined paid Forge LLMs for now) — verified in Jira (v5.5.0) |
 | 5 — Rovo agent (bonus) | 🟡 Built, lint-clean and deployed (v5.8.0); **not verified live** — Rovo/Agent Studio is not available on the dev site |
 | 6 — Quality assurance | ✅ Done — see `docs/TEST_REPORT.md` (110 tests, 81 % coverage, v5.9.0); 3 manual checks left for the user |
-| 7 | ⏳ Not started |
+| 7 — Submission prep | 🟡 Repository ready (README, MIT LICENSE, ARCHITECTURE, DECISIONS, Devpost texts, demo script, checklist; sanitizer PASS-WITH-WARNINGS). Publishing, production deploy, install link and video need the author — see `docs/DEVPOST_CHECKLIST.md` |
 
 ## Phase 5 — Rovo agent
 
