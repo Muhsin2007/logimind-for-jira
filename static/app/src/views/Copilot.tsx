@@ -20,6 +20,7 @@ export function Copilot(_props: NavProps) {
     setQuestion(text);
     setBusy(true);
     setError(null);
+    setAnswer(null);
     try {
       // The AI writes its answer in the person's UI language.
       setAnswer(await call('askCopilot', { question: text, locale }));

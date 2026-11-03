@@ -1,5 +1,5 @@
 import type { RiskEvent } from '../../../../src/shared/api';
-import { ev, num, str, type Messages } from './en';
+import { ev, num, numText, str, type Messages } from './en';
 
 /** Russian plural form: 1 день, 2 дня, 5 дней (11–14 always take the "many" form). */
 export function plural(n: number, one: string, few: string, many: string): string {
@@ -476,8 +476,8 @@ export const ru: Messages = {
       default: {
         const available = num(r, 'Available');
         return available !== null && available <= 0
-          ? `Доступного остатка нет: на складе ${fmt.number(num(r, 'On hand') ?? 0)}, в резерве ${fmt.number(num(r, 'Reserved') ?? 0)}.`
-          : `Прогноз остатка (${fmt.number(num(r, 'Projected') ?? 0)}) ниже страхового запаса ${fmt.number(num(r, 'Safety stock') ?? 0)}.`;
+          ? `Доступного остатка нет: на складе ${numText(r, 'On hand', fmt)}, в резерве ${numText(r, 'Reserved', fmt)}.`
+          : `Прогноз остатка (${numText(r, 'Projected', fmt)}) ниже страхового запаса ${numText(r, 'Safety stock', fmt)}.`;
       }
     }
   },
@@ -493,7 +493,9 @@ export const ru: Messages = {
         return `Для ${units} нет ожидаемой даты, поэтому поставку нельзя учесть в планировании остатков.`;
       default: {
         const available = num(r, 'Available');
-        const gap = (num(r, 'Safety stock') ?? 0) - (num(r, 'Projected') ?? 0);
+        const safety = num(r, 'Safety stock');
+        const projected = num(r, 'Projected');
+        const gap = safety === null || projected === null ? 0 : safety - projected;
         if (available !== null && available <= 0) return 'Спрос на этом складе нельзя обслужить из остатка, пока не придут поставки.';
         return gap > 0 ? `Не хватает ${fmt.number(gap)} шт. до страхового запаса даже с поставками на ближайшие 7 дней.` : 'Остаток ниже страхового уровня.';
       }

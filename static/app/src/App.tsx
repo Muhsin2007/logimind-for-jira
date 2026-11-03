@@ -71,9 +71,9 @@ export function App() {
   }, []);
 
   // While the drawer is open the page behind it is inert (React 18 has no `inert` prop).
-  const panel = useRef<HTMLDivElement>(null);
+  const page = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (panel.current) panel.current.inert = shipmentId !== null;
+    if (page.current) page.current.inert = shipmentId !== null;
   }, [shipmentId]);
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -95,6 +95,7 @@ export function App() {
 
   return (
     <div className="app">
+      <div ref={page}>
       <header className="topbar">
         <div className="brand">
           <LogoMark />
@@ -127,7 +128,7 @@ export function App() {
         ))}
       </div>
 
-      <div ref={panel} id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={-1}>
         <div className="page-head">
           <div>
             <h1>{t.tabs[tab]}</h1>
@@ -135,6 +136,7 @@ export function App() {
           </div>
         </div>
         <View {...nav} />
+      </div>
       </div>
 
       {shipmentId && <ShipmentDrawer id={shipmentId} onClose={closeDrawer} onSimulate={simulate} />}

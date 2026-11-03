@@ -12,12 +12,14 @@
   --surface-overlay: #ffffff;
   --border: #e4e7ec;
   --border-strong: #d0d5dd;
+  /* Form control borders need 3:1 against the surface (WCAG 1.4.11). */
+  --border-input: #8a93a3;
   --hover: #f2f4f7;
 
   /* Text */
   --text: #161b26;
   --text-subtle: #475467;
-  --text-subtlest: #667085;
+  --text-subtlest: #5b6578;
   --text-danger: #b42318;
   --text-success: #067647;
   --text-warning: #93370d;
@@ -28,6 +30,8 @@
   --accent-subtle: #eff4ff;
   --accent-text: #1d4ed8;
   --on-accent: #ffffff;
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --link: var(--ds-link, #1d4ed8);
 
   /* Severity: muted, always paired with a glyph and a label. */
@@ -90,6 +94,7 @@ html[data-color-mode='dark'] {
   --surface-overlay: #1c2026;
   --border: #272c34;
   --border-strong: #353b45;
+  --border-input: #6b7482;
   --hover: #20252c;
 
   --text: #e8eaed;
@@ -104,6 +109,9 @@ html[data-color-mode='dark'] {
   --accent-subtle: rgba(59, 130, 246, 0.14);
   --accent-text: #8ab4ff;
   --on-accent: #ffffff;
+  /* Filled buttons stay dark enough for white text (4.5:1); --accent stays bright for marks. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --link: #8ab4ff;
 
   --sev-critical: #e5534b;
@@ -121,8 +129,8 @@ html[data-color-mode='dark'] {
 
   --success: #3fb97b;
   --success-bg: rgba(63, 185, 123, 0.13);
-  --danger: #e5534b;
-  --danger-hover: #f06a62;
+  --danger: #d92d20;
+  --danger-hover: #b42318;
   --danger-bg: rgba(229, 83, 75, 0.12);
   --warning-bg: rgba(214, 163, 58, 0.12);
   --info-bg: rgba(59, 130, 246, 0.12);

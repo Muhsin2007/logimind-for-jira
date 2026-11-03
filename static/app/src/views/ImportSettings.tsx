@@ -67,12 +67,12 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
       const results: { filename: string; outcome: ImportOutcome }[] = [];
       const mappings: PendingMapping[] = [];
       for (const { filename, read } of items) {
-        const content = await read();
-        if (content === null || content.length > MAX_BYTES) {
-          results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: t.fileTooLarge }] } });
-          continue;
-        }
         try {
+          const content = await read();
+          if (content === null || content.length > MAX_BYTES) {
+            results.push({ filename, outcome: { ok: false, errors: [{ line: 0, field: null, message: t.fileTooLarge }] } });
+            continue;
+          }
           const outcome = await call('importCsv', { filename, content });
           if (isHeaderProblem(outcome)) {
             // Ask for a column mapping (AI-proposed when names do not match) instead of failing the file.
@@ -154,7 +154,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           onDrop={onDrop}
         >
           <span className="dropzone-icon"><Icon name="upload" size={20} /></span>
-          <span className="dropzone-title">{busy === 'upload' ? t.importingAi : t.dropTitle}</span>
+          <span className="dropzone-title" role="status">{busy === 'upload' ? t.importingAi : t.dropTitle}</span>
           <span>
             {t.dropOr}{' '}
             <input
@@ -228,7 +228,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
               type="button"
               className="btn btn-primary"
               disabled={busy !== null || !canManage}
-              onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}
+              onClick={() => run('demo', async () => setOutcomes((await call('loadDemoData')).map((o, i) => ({ filename: o.ok ? `demo-${o.batch.kind}.csv` : i === 0 ? 'demo-shipments.csv' : 'demo-inventory.csv', outcome: o }))))}
             >
               <Icon name="database" size={14} /> {busy === 'demo' ? t.loading : t.loadDemo}
             </button>
@@ -238,7 +238,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
               <strong className="small">{t.dangerZone}</strong>
               <p className="footnote danger-text">{t.deleteQuestion}</p>
             </div>
-            <button type="button" className="btn btn-danger-subtle" disabled={busy !== null || !canManage} onClick={() => setConfirmClear(true)}>
+            <button type="button" className="btn btn-danger-subtle" disabled={busy !== null || !canManage} onClick={() => { setError(null); setConfirmClear(true); }}>
               <Icon name="trash" size={14} /> {t.deleteAll}
             </button>
           </div>

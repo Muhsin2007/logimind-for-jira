@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { COVER_HORIZON_DAYS } from '../../../src/domain/cover';
 import type { CoverProjection, Severity, Shipment } from './api';
 import { useI18n } from './i18n';
@@ -47,12 +47,14 @@ export function CoverValue({ cover }: { cover: CoverProjection }) {
 export function InfoTip({ text }: { text: string }) {
   const { t } = useI18n();
   const id = useId();
+  // Escape hides the tip but keeps focus on the button (WCAG 1.4.13).
+  const [dismissed, setDismissed] = useState(false);
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'Escape') e.currentTarget.blur();
+    if (e.key === 'Escape') setDismissed(true);
   };
   return (
-    <span className="tip-wrap">
-      <button type="button" className="tip-btn" aria-label={t.moreInfo} aria-describedby={id} onKeyDown={onKeyDown}>
+    <span className={`tip-wrap${dismissed ? ' tip-dismissed' : ''}`} onMouseLeave={() => setDismissed(false)}>
+      <button type="button" className="tip-btn" aria-label={t.moreInfo} aria-describedby={id} onKeyDown={onKeyDown} onBlur={() => setDismissed(false)}>
         <Icon name="info" size={14} />
       </button>
       <span role="tooltip" id={id} className="tip">{text}</span>
@@ -274,6 +276,10 @@ export function ConfirmDialog({ open, title, children, confirmLabel, busy, onCon
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const bodyId = useId();
+  // The browser can close a modal on its own (a second Escape); report that as a cancel.
+  const openRef = useRef(open);
+  openRef.current = open;
   const { t } = useI18n();
 
   useEffect(() => {
@@ -282,6 +288,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, busy, onCon
     const opener = document.activeElement as HTMLElement | null;
     if (!dialog.open) dialog.showModal();
     return () => {
+      openRef.current = false;
       if (dialog.open) dialog.close();
       opener?.focus();
     };
@@ -292,6 +299,10 @@ export function ConfirmDialog({ open, title, children, confirmLabel, busy, onCon
       ref={ref}
       className="dialog"
       aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      onClose={() => {
+        if (openRef.current) onCancel();
+      }}
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onCancel();
@@ -303,7 +314,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, busy, onCon
             <span className="dialog-icon"><Icon name="alert" size={20} /></span>
             <h2 id={titleId}>{title}</h2>
           </div>
-          <div className="dialog-body">{children}</div>
+          <div className="dialog-body" id={bodyId}>{children}</div>
           <div className="dialog-actions">
             <button type="button" className="btn" onClick={onCancel} disabled={busy} autoFocus>
               {t.cancel}

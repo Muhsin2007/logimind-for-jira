@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { COVER_HORIZON_DAYS } from '../../../../src/domain/cover';
 import { daysBetween, todayUtc } from '../../../../src/domain/dates';
 import { expectedArrival, isOpen } from '../../../../src/domain/risk-engine';
@@ -68,37 +68,53 @@ export function ShipmentDrawer({ id, onClose, onSimulate }: { id: string; onClos
           [t.factBelowSafetyFrom, cover.belowSafetyDate ? fmt.date(cover.belowSafetyDate) : t.beyondHorizonLong(COVER_HORIZON_DAYS)],
         ];
 
-  // Focus the dialog on open and return focus to the opener on close.
+  // Focus the dialog on open; on close return focus to the opener, or to the page if it is gone.
+  // The return waits a frame: the page stops being inert only after the drawer unmounts.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     closeButton.current?.focus();
-    return () => opener?.focus();
+    return () => {
+      requestAnimationFrame(() => {
+        if (opener && opener !== document.body && opener.isConnected) opener.focus();
+        else document.getElementById('tabpanel')?.focus();
+      });
+    };
   }, []);
 
-  const onKeyDown = (e: ReactKeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-      return;
-    }
-    if (e.key !== 'Tab' || !dialog.current) return;
-    // The page behind is `inert`, so only wrap focus at the dialog's edges.
-    const focusable = dialog.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input, select, summary, [tabindex]:not([tabindex="-1"])');
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last?.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first?.focus();
-    }
-  };
+  // Listen on the document: focus can fall to <body> (a click on text, or a button that unmounts).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeRef.current();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialog.current) return;
+      // The page behind is `inert`, so only wrap focus at the dialog's edges.
+      const focusable = dialog.current.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const inside = dialog.current.contains(document.activeElement);
+      if (!inside || (e.shiftKey && document.activeElement === first)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first)?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const data = state.status === 'ready' ? state.data : null;
 
   return (
     <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <aside ref={dialog} className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onKeyDown={onKeyDown}>
+      <aside ref={dialog} className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabIndex={-1}>
         <header className="drawer-head">
           <div>
             <div className="drawer-kicker">{t.shipment}</div>

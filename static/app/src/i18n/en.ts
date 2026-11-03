@@ -8,6 +8,10 @@ export const num = (risk: RiskEvent, label: string): number | null => {
   return typeof value === 'number' ? value : null;
 };
 export const str = (risk: RiskEvent, label: string): string => String(ev(risk, label) ?? '—');
+export const numText = (risk: RiskEvent, label: string, fmt: Formatters): string => {
+  const value = num(risk, label);
+  return value === null ? '—' : fmt.number(value);
+};
 const daysEn = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
 const STATUS_EN = {
   planned: 'Planned',
@@ -463,8 +467,8 @@ export const en = {
       default: {
         const available = num(r, 'Available');
         return available !== null && available <= 0
-          ? `Nothing is available now: ${fmt.number(num(r, 'On hand') ?? 0)} on hand, ${fmt.number(num(r, 'Reserved') ?? 0)} reserved.`
-          : `Projected stock (${fmt.number(num(r, 'Projected') ?? 0)}) is below the safety stock of ${fmt.number(num(r, 'Safety stock') ?? 0)}.`;
+          ? `Nothing is available now: ${numText(r, 'On hand', fmt)} on hand, ${numText(r, 'Reserved', fmt)} reserved.`
+          : `Projected stock (${numText(r, 'Projected', fmt)}) is below the safety stock of ${numText(r, 'Safety stock', fmt)}.`;
       }
     }
   },
@@ -480,7 +484,9 @@ export const en = {
         return `${units} have no expected date, so they cannot be planned into stock.`;
       default: {
         const available = num(r, 'Available');
-        const gap = (num(r, 'Safety stock') ?? 0) - (num(r, 'Projected') ?? 0);
+        const safety = num(r, 'Safety stock');
+        const projected = num(r, 'Projected');
+        const gap = safety === null || projected === null ? 0 : safety - projected;
         if (available !== null && available <= 0) return 'Demand at this warehouse cannot be served from stock until inbound stock arrives.';
         return gap > 0 ? `${fmt.number(gap)} units short of safety stock, even after inbound due within 7 days.` : 'Stock is below the safety level.';
       }

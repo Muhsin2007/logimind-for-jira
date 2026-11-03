@@ -61,7 +61,7 @@ export function Shipments({ dataVersion, onOpenShipment }: NavProps) {
             { value: 'none', label: t.riskFilterNone, count: all.length - atRisk },
           ]}
         />
-        <span className="toolbar-count">{t.ofTotal(rows.length, all.length)}</span>
+        <span className="toolbar-count" role="status">{t.ofTotal(rows.length, all.length)}</span>
       </div>
 
       <div className="table-wrap">

@@ -48,7 +48,7 @@ export function RiskCenter({ dataVersion, onOpenShipment, onNavigate }: NavProps
           <option value="all">{t.allRiskTypes}</option>
           {Object.entries(t.riskType).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <span className="toolbar-count">{t.ofTotal(risks.length, all.length)} · {t.evaluatedOn(fmt.date(state.data.today))}</span>
+        <span className="toolbar-count" role="status">{t.ofTotal(risks.length, all.length)} · {t.evaluatedOn(fmt.date(state.data.today))}</span>
       </div>
 
       <ul className="risk-cards">

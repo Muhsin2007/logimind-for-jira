@@ -25,7 +25,7 @@
 .kpi-value { font-size: var(--fs-2xl); font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kpi-of { color: var(--text-subtlest); font-size: var(--fs-lg); font-weight: 500; letter-spacing: 0; }
 .kpi-sub { color: var(--text-subtlest); font-size: var(--fs-sm); }
-.kpi-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; margin-top: auto; padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
+.kpi-link { min-height: 24px; align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; margin-top: auto; padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
 .kpi-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 .kpi-danger .kpi-icon { background: var(--sev-critical-bg); color: var(--sev-critical-text); }
 .kpi-danger .kpi-value { color: var(--text-danger); }
@@ -185,10 +185,10 @@
 .step-done { color: var(--text-subtle); }
 .step-done .step-num { background: var(--success-bg); border-color: transparent; color: var(--text-success); }
 .step-active { color: var(--text); }
-.step-active .step-num { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+.step-active .step-num { background: var(--accent-fill); border-color: transparent; color: var(--on-accent); }
 
 .dropzone {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
   padding: var(--s8) var(--s5); border: 1.5px dashed var(--border-strong); border-radius: var(--r-lg); background: var(--surface-2);
   transition: border-color 0.12s, background-color 0.12s;
 }

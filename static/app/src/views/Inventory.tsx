@@ -65,7 +65,7 @@ export function Inventory({ dataVersion }: NavProps) {
             { value: 'below', label: t.belowSafetyOnly, count: below },
           ]}
         />
-        <span className="toolbar-count">{t.ofTotal(rows.length, items.length)}</span>
+        <span className="toolbar-count" role="status">{t.ofTotal(rows.length, items.length)}</span>
       </div>
 
       <div className="table-wrap">

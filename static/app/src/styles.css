@@ -71,7 +71,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lang-switch { display: inline-flex; padding: 2px; gap: 2px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-md); }
 .lang-btn { border: 0; background: none; border-radius: var(--r-sm); padding: 3px 10px; font-size: var(--fs-sm); font-weight: 600; color: var(--text-subtle); cursor: pointer; }
 .lang-btn:hover { color: var(--text); }
-.lang-btn[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.lang-btn[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border-input), var(--shadow-sm); }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -82,11 +82,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .btn:hover:not(:disabled) { background: var(--hover); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--accent); border-color: transparent; color: var(--on-accent); }
-.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-primary { background: var(--accent-fill); border-color: transparent; color: var(--on-accent); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-fill-hover); }
 .btn-subtle { background: none; border-color: transparent; box-shadow: none; color: var(--text-subtle); }
 .btn-subtle:hover:not(:disabled) { color: var(--text); }
-.btn-danger { background: var(--danger); border-color: transparent; color: #fff; }
+.btn-danger { background: var(--danger); border-color: transparent; color: var(--on-accent); }
 .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
 .btn-danger-subtle { color: var(--text-danger); }
 .btn-sm { min-height: 28px; padding: 0 10px; font-size: var(--fs-md); }
@@ -98,7 +98,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- Inputs ---------- */
 .input {
   height: 32px; padding: 0 10px; min-width: 160px; border-radius: var(--r-md);
-  background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); box-shadow: var(--shadow-sm);
+  background: var(--surface); color: var(--text); border: 1px solid var(--border-input); box-shadow: var(--shadow-sm);
 }
 select.input { padding-right: 28px; }
 textarea.input { height: auto; padding: 8px 10px; }
@@ -120,7 +120,7 @@ textarea.input { height: auto; padding: 8px 10px; }
   min-height: 26px; padding: 0 10px; border-radius: var(--r-sm); color: var(--text-subtle); font-weight: 500; font-size: var(--fs-md);
 }
 .segment:hover { color: var(--text); }
-.segment[aria-pressed='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.segment[aria-pressed='true'] { background: var(--surface); color: var(--text); font-weight: 650; box-shadow: 0 0 0 1px var(--border-input), var(--shadow-sm); }
 .segment-count { font-size: var(--fs-xs); font-weight: 600; color: var(--text-subtlest); font-variant-numeric: tabular-nums; }
 
 /* ---------- Cards and panels ---------- */
@@ -166,15 +166,16 @@ textarea.input { height: auto; padding: 8px 10px; }
 
 /* ---------- Tooltip ---------- */
 .tip-wrap { position: relative; display: inline-flex; }
-.tip-btn { display: inline-flex; border: 0; background: none; padding: 2px; color: var(--text-subtlest); cursor: help; border-radius: 50%; }
+.tip-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; border: 0; background: none; padding: 2px; color: var(--text-subtlest); cursor: help; border-radius: 50%; }
 .tip-btn:hover { color: var(--text); }
 .tip {
-  position: absolute; z-index: 20; top: calc(100% + 6px); right: -8px; width: 260px; padding: 8px 10px;
+  position: absolute; z-index: 20; top: calc(100% + 6px); right: -8px; width: 260px; max-width: min(260px, 80vw); padding: 8px 10px;
   background: var(--text); color: var(--bg); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
   font-size: var(--fs-sm); font-weight: 400; line-height: 1.45; text-align: left; text-transform: none; letter-spacing: 0;
   opacity: 0; visibility: hidden; transition: opacity 0.12s;
 }
 .tip-wrap:hover .tip, .tip-btn:focus-visible + .tip { opacity: 1; visibility: visible; }
+.tip-wrap.tip-dismissed .tip { opacity: 0; visibility: hidden; }
 
 /* ---------- Tables ---------- */
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); }
@@ -256,6 +257,13 @@ textarea.input { height: auto; padding: 8px 10px; }
 .dialog-icon { display: inline-flex; padding: 8px; border-radius: 50%; background: var(--danger-bg); color: var(--text-danger); }
 .dialog-body { color: var(--text-subtle); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--s2); margin-top: var(--s6); }
+
+/* Windows High Contrast: state shown by background alone needs a system colour. */
+@media (forced-colors: active) {
+  .tab-active::after, .meter-fill, .dist-seg, .status-dot { forced-color-adjust: none; background: Highlight; }
+  .segment[aria-pressed='true'], .lang-btn[aria-pressed='true'] { outline: 2px solid Highlight; }
+  .badge, .callout, .kpi, .panel { border: 1px solid CanvasText; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
