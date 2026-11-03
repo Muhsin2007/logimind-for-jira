@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { call, useAsync } from '../api';
-import { EmptyState, ErrorState, Loading, SeverityBadge } from '../components';
+import { CoverValue, EmptyState, ErrorState, Loading, SeverityBadge } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
 
@@ -42,7 +42,7 @@ export function Inventory({ dataVersion }: NavProps) {
         </label>
         <span className="muted small">{t.ofTotal(rows.length, state.data.items.length)}</span>
       </div>
-      <p className="muted small">{t.inventoryNote}</p>
+      <p className="muted small">{t.inventoryNote} {t.coverNote}</p>
 
       <div className="table-wrap">
         <table className="table">
@@ -51,7 +51,7 @@ export function Inventory({ dataVersion }: NavProps) {
               <th>{t.colSku}</th><th>{t.colProduct}</th><th>{t.colWarehouse}</th>
               <th className="num">{t.colOnHand}</th><th className="num">{t.colReserved}</th><th className="num">{t.colAvailable}</th>
               <th className="num">{t.colInbound7}</th><th className="num">{t.colProjected}</th><th className="num">{t.colSafety}</th>
-              <th>{t.colCoverage}</th><th className="num">{t.colUnitCost}</th><th>{t.colRisk}</th>
+              <th>{t.colCoverage}</th><th className="num">{t.colDailyUsage}</th><th>{t.colDaysOfCover}</th><th className="num">{t.colUnitCost}</th><th>{t.colRisk}</th>
             </tr>
           </thead>
           <tbody>
@@ -82,6 +82,8 @@ export function Inventory({ dataVersion }: NavProps) {
                     </span>{' '}
                     <span className="small" aria-hidden="true">{Math.round(coverage * 100)}%</span>
                   </td>
+                  <td className="num">{i.cover.dailyUsage === null ? '—' : fmt.number(i.cover.dailyUsage)}</td>
+                  <td><CoverValue cover={i.cover} /></td>
                   <td className="num">{i.unitCost === null ? '—' : fmt.money(i.unitCost)}</td>
                   <td>{i.risk ? <SeverityBadge severity={i.risk.severity} /> : <span className="muted">—</span>}</td>
                 </tr>

@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
-import type { Severity, Shipment } from './api';
+import { COVER_HORIZON_DAYS } from '../../../src/domain/cover';
+import type { CoverProjection, Severity, Shipment } from './api';
 import { useI18n } from './i18n';
 
 /** Severity is status, not identity: always an icon glyph + label, never colour alone. */
@@ -17,6 +18,18 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
 export function StatusBadge({ status }: { status: Shipment['status'] }) {
   const { t } = useI18n();
   return <span className={`badge status status-${status}`}>{t.status[status]}</span>;
+}
+
+/** Days of cover with the projected stock-out date; a dash when the file has no daily usage. */
+export function CoverValue({ cover }: { cover: CoverProjection }) {
+  const { t, fmt } = useI18n();
+  if (cover.dailyUsage === null || cover.dailyUsage <= 0) return <span className="muted" title={t.noUsage}>—</span>;
+  if (cover.daysOfCover === null) return <span>{t.beyondHorizon(COVER_HORIZON_DAYS)}</span>;
+  return (
+    <span className={cover.daysOfCover <= 7 ? 'text-danger' : undefined}>
+      <strong>{t.daysShort(cover.daysOfCover)}</strong> <span className="small nowrap">{t.runsOutOn(fmt.date(cover.stockOutDate))}</span>
+    </span>
+  );
 }
 
 export function StatTile({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: 'danger' | 'warning' }) {

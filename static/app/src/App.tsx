@@ -8,8 +8,9 @@ import { Inventory } from './views/Inventory';
 import { RiskCenter } from './views/RiskCenter';
 import { ShipmentDrawer } from './views/ShipmentDrawer';
 import { Shipments } from './views/Shipments';
+import { WhatIf } from './views/WhatIf';
 
-export type Tab = 'dashboard' | 'shipments' | 'inventory' | 'risks' | 'copilot' | 'import';
+export type Tab = 'dashboard' | 'shipments' | 'inventory' | 'whatIf' | 'risks' | 'copilot' | 'import';
 
 export interface NavProps {
   /** Increments after any data change so views refetch. */
@@ -17,14 +18,17 @@ export interface NavProps {
   onOpenShipment: (id: string) => void;
   onNavigate: (tab: Tab) => void;
   onDataChanged: () => void;
+  /** Shipment to preselect in the what-if view (from the shipment drawer). */
+  whatIfShipmentId: string | null;
 }
 
-const TABS: Tab[] = ['dashboard', 'shipments', 'inventory', 'risks', 'copilot', 'import'];
+const TABS: Tab[] = ['dashboard', 'shipments', 'inventory', 'whatIf', 'risks', 'copilot', 'import'];
 
 const VIEWS: Record<Tab, (props: NavProps) => JSX.Element> = {
   dashboard: Dashboard,
   shipments: Shipments,
   inventory: Inventory,
+  whatIf: WhatIf,
   risks: RiskCenter,
   copilot: Copilot,
   import: ImportSettings,
@@ -34,13 +38,19 @@ export function App() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [shipmentId, setShipmentId] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [whatIfShipmentId, setWhatIfShipmentId] = useState<string | null>(null);
 
   const onDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
   const nav = useMemo<NavProps>(
-    () => ({ dataVersion, onOpenShipment: setShipmentId, onNavigate: setTab, onDataChanged }),
-    [dataVersion, onDataChanged],
+    () => ({ dataVersion, onOpenShipment: setShipmentId, onNavigate: setTab, onDataChanged, whatIfShipmentId }),
+    [dataVersion, onDataChanged, whatIfShipmentId],
   );
   const closeDrawer = useCallback(() => setShipmentId(null), []);
+  const simulate = useCallback((id: string) => {
+    setWhatIfShipmentId(id);
+    setShipmentId(null);
+    setTab('whatIf');
+  }, []);
 
   // While the drawer is open the page behind it is inert (React 18 has no `inert` prop).
   const panel = useRef<HTMLDivElement>(null);
@@ -96,7 +106,7 @@ export function App() {
         <View {...nav} />
       </div>
 
-      {shipmentId && <ShipmentDrawer id={shipmentId} onClose={closeDrawer} />}
+      {shipmentId && <ShipmentDrawer id={shipmentId} onClose={closeDrawer} onSimulate={simulate} />}
     </div>
   );
 }

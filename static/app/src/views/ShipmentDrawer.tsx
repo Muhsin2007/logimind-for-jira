@@ -1,15 +1,31 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { call, useAsync } from '../api';
-import { ErrorState, Facts, Loading, SeverityBadge, StatusBadge } from '../components';
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { COVER_HORIZON_DAYS } from '../../../../src/domain/cover';
+import { daysBetween, todayUtc } from '../../../../src/domain/dates';
+import { expectedArrival, isOpen } from '../../../../src/domain/risk-engine';
+import { call, useAsync, type CoverProjection } from '../api';
+import { CoverValue, ErrorState, Facts, Loading, SeverityBadge, StatusBadge } from '../components';
 import { useI18n } from '../i18n';
 import { IssueAction, useIssueLinks } from '../issues';
 
-export function ShipmentDrawer({ id, onClose }: { id: string; onClose: () => void }) {
+export function ShipmentDrawer({ id, onClose, onSimulate }: { id: string; onClose: () => void; onSimulate: (id: string) => void }) {
   const state = useAsync(() => call('getShipment', { id }), [id]);
   const issues = useIssueLinks(0);
   const closeButton = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLElement>(null);
   const { t, fmt } = useI18n();
+
+  // Only a shipment that is still expected can be delayed in the what-if view.
+  const shipment = state.status === 'ready' ? state.data?.shipment : undefined;
+  const upcoming = !!shipment && isOpen(shipment) && daysBetween(todayUtc(), expectedArrival(shipment)) >= 0;
+
+  // Days of cover rows, only when the inventory file gives a daily usage.
+  const coverFacts = (cover: CoverProjection): [string, ReactNode][] =>
+    cover.dailyUsage === null || cover.dailyUsage <= 0
+      ? []
+      : [
+          [t.factDaysOfCover, <CoverValue key="c" cover={cover} />],
+          [t.factBelowSafetyFrom, cover.belowSafetyDate ? fmt.date(cover.belowSafetyDate) : t.beyondHorizonLong(COVER_HORIZON_DAYS)],
+        ];
 
   // Focus the dialog on open and return focus to the opener on close.
   useEffect(() => {
@@ -100,10 +116,17 @@ export function ShipmentDrawer({ id, onClose }: { id: string; onClose: () => voi
                     [t.factProjected, fmt.number(state.data.inventory.projected)],
                     [t.factSafety, fmt.number(state.data.inventory.safetyStock)],
                     [t.factStockRisk, state.data.inventory.risk ? <SeverityBadge key="r" severity={state.data.inventory.risk.severity} /> : t.none],
+                    [t.factDailyUsage, state.data.inventory.cover.dailyUsage === null ? t.notProjected : fmt.number(state.data.inventory.cover.dailyUsage)],
+                    ...coverFacts(state.data.inventory.cover),
                   ]}
                 />
               ) : (
                 <p className="muted">{t.noInventoryRecord(state.data.shipment.sku, state.data.shipment.warehouse)}</p>
+              )}
+              {upcoming && (
+                <div className="row">
+                  <button type="button" className="btn" onClick={() => onSimulate(id)}>{t.simulateDelay}</button>
+                </div>
               )}
             </section>
           </div>

@@ -166,7 +166,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
           <h3 className="h4">{t.formatShipments}</h3>
           <p className="mono small wrap">shipment_id*, order_id, supplier*, sku*, product_name, qty*, planned_arrival*, eta, actual_arrival, status*, warehouse*, carrier, tracking_ref</p>
           <h3 className="h4">{t.formatInventory}</h3>
-          <p className="mono small wrap">sku*, product_name, warehouse*, on_hand*, reserved, inbound_qty, safety_stock*, unit_cost, updated_at</p>
+          <p className="mono small wrap">sku*, product_name, warehouse*, on_hand*, reserved, inbound_qty, safety_stock*, unit_cost, daily_usage, updated_at</p>
           <p className="muted small">{t.formatNote}</p>
         </Panel>
 
