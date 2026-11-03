@@ -10,11 +10,12 @@ Built for **Codegeist 2026** — category *Apps for Specialized Industries*, bon
 
 | | |
 |---|---|
-| **Validated CSV import** | Shipments and inventory files, detected by header. Row-level errors (bad dates, unknown status, duplicates, shifted columns, out-of-range numbers) are listed by line — invalid rows are never used silently. Admin-only, with an import history. |
+| **Validated CSV import** | Shipments and inventory files (comma, semicolon or tab separated, as exported or copied from Excel), detected by header. Row-level errors (bad dates, unknown status, duplicates, shifted columns, out-of-range numbers) are listed by line — invalid rows are never used silently. Admin-only, with an import history. |
+| **AI column mapping** | A supplier file with its own column names ("Shipment #", "Vendor", "Expected Date"…) gets a mapping proposed by Claude (Atlassian-hosted Forge LLM) from the headers and the first three rows. The admin checks and edits it; only the header is mapped, values are never changed, and every row is still validated. |
 | **Deterministic risk engine** | `LATE_SHIPMENT`, `ETA_SLIP`, `MISSING_ETA`, `LOW_STOCK` (incl. stock-out). Every risk carries its evidence and rule version. It is a *rule-based* score, not a prediction. |
 | **Dashboard & screens** | KPIs (late shipments, on-time rate, SKUs below safety stock, value at risk), Shipments, Inventory, Risk Center, shipment drawer. Follows Jira's light/dark theme. |
 | **Jira integration** | "Create Jira issue" from any risk, created **as the user** in an admin-chosen project. One issue per risk (duplicate-safe), live status, and a **LogiMind panel on the Jira issue** showing the source shipment. |
-| **Copilot (rule-based)** | Ask about shipments, SKUs or today's risks (EN/RU keywords). Answers are verified facts with cited IDs, evidence-based next steps (contact supplier, prioritise inbound, transfer from a warehouse with surplus, replenish) and an explicit list of unknowns. No AI model is used. |
+| **AI Copilot** | Free-form questions ("which delays hurt stock the most?") answered by Claude (Forge LLM) that may only call LogiMind's read-only tools. Every ID, number and date in the answer is checked against the data; an unverifiable answer, a model error or an unavailable model falls back to the deterministic rule-based copilot, and the answer says so. Facts with cited IDs, next steps, and an explicit list of unknowns. |
 | **Rovo agent** | `LogiMind` agent with four read-only actions (risk summary, shipment, inventory, linked Jira issue). Imported text is isolated and treated as untrusted data. |
 
 Data never leaves Atlassian: the app runs on Forge with Forge Storage and is eligible for **Runs on Atlassian**.
@@ -26,8 +27,9 @@ Jira ── Custom UI (React) ──invoke──► Forge resolvers ─┐
      └─ Issue panel (Custom UI) ───────────────────────┤
 Rovo ── LogiMind agent ──actions (GET)─────────────────┤
                                                       ▼
-            LogisticsService · IssueService · RuleBasedCopilot
-                 │                 │
+   LogisticsService · IssueService · LlmCopilot (→ RuleBasedCopilot) · ColumnMapper
+                 │                 │               │
+                 │                 │        Forge LLM (Claude Haiku, Atlassian-hosted)
         domain/ (CSV, rules,   Jira REST (asUser):
         KPIs — pure, tested)   permissions, create issue, status
                  │
@@ -70,11 +72,12 @@ Project layout: `src/domain` (pure logic), `src/services`, `src/storage` (Forge 
 | `read:jira-work` | Admin check (`mypermissions`), project / issue-type lists, live issue status |
 | `write:jira-work` | Create an issue from a risk, as the clicking user |
 
-No external egress, no AI provider.
+The `llm` module uses Atlassian-hosted Forge LLMs (Claude). No external egress and no external AI provider: data stays in Atlassian.
 
 ## Known limitations
 
-- Copilot is rule-based (no LLM) by design choice; Forge LLMs can be plugged in behind the same read-only tools.
+- The AI checks IDs, numbers and dates, not reasoning: a suggestion can still draw a wrong conclusion from correct values, so the UI asks users to review it. Answers that compute new numbers are rejected and fall back to rules.
+- AI usage is capped per site per day (150 model calls; the Copilot stops at 120 and at 40 per person, keeping the rest for admins' column mapping); above that the rule-based copilot and name-only column matching are used.
 - "Today" is evaluated in UTC; up to 2,000 rows per CSV file; answers are in English.
 - The Rovo agent requires Rovo on the site; it could not be exercised live on the author's Free-plan developer site (see [docs/TEST_REPORT.md](docs/TEST_REPORT.md)).
 - Logistics data is app-wide on a site: anyone who can open LogiMind or use the agent can read it; only Jira administrators can change it.

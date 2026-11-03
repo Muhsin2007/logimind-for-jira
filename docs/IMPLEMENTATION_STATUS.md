@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 
 | Phase | Status |
 |---|---|
@@ -8,10 +8,35 @@ Last updated: 2026-11-02
 | 1 — Environment and Hello World | ✅ Done — verified inside Jira |
 | 2 — Core application | ✅ Done — verified inside Jira (dev environment, app v4.0.0) |
 | 3 — Jira integration | ✅ Done — verified inside Jira (app v5.2.0) |
-| 4 — AI Logistics Copilot | 🟡 Done in **rule-based mode** (no AI provider: user declined paid Forge LLMs for now) — verified in Jira (v5.5.0) |
+| 4 — AI Logistics Copilot | ✅ Done — **AI mode via Forge LLM** with rule-based fallback (Roadmap week 1), verified in Jira on the dev environment (v6.6.0) |
 | 5 — Rovo agent (bonus) | 🟡 Built, lint-clean and deployed (v5.8.0); **not verified live** — Rovo/Agent Studio is not available on the dev site |
 | 6 — Quality assurance | ✅ Done — see `docs/TEST_REPORT.md` (110 tests, 81 % coverage, v5.9.0); 3 manual checks left for the user |
 | 7 — Submission prep | 🟡 Repository ready (README, MIT LICENSE, ARCHITECTURE, DECISIONS, Devpost texts, demo script, checklist; sanitizer PASS-WITH-WARNINGS). Publishing, production deploy, install link and video need the author — see `docs/DEVPOST_CHECKLIST.md` |
+
+## Roadmap week 1 — Forge LLM: AI column mapping and AI Copilot (2026-11-03)
+
+**Decision:** D15/D16 (supersede D9). Model `claude-haiku-4-5-20251001` (listed ACTIVE on the Forge LLM models page on 2026-11-03; its earliest retirement date, 2026-10-15, has passed — keep an eye on the page). `llm` module added: major version upgrade, approved on **development only**.
+
+**Built**
+- `src/llm/` — `LlmPort` (mockable) and `ForgeLlm` (`@forge/llm` `chat`, temperature 0, ≤ 1,200 output tokens, usage logged per call). Budget: 150 calls/day app-wide, the copilot stops at 120 (30 kept for admin column mapping) and at 40 calls per person; counters fail closed if KVS cannot be read or written.
+- **AI column mapping** — `src/domain/column-mapping.ts` (schema, name matching, header-only rewrite that follows the parser's quoting), `src/ai/column-mapper.ts` (name match first; otherwise the model gets headers + 3 cleaned, 40-char samples and must answer through a forced `propose_mapping` tool; invented fields, duplicates and bad indexes are dropped), `LogisticsService.importCsvWithMapping`, admin-only resolvers `proposeColumnMapping` / `importCsvWithMapping`. CSV parser accepts comma, semicolon (Excel) and tab (cells pasted from Excel). UI: mapping table with first values, file-type switch, required-field check, type warnings; new **"Paste rows copied from Excel"** box. Fixture `tests/fixtures/supplier-export-messy.csv`.
+- **AI Copilot** — `src/copilot/llm-copilot.ts`: the model may call only the four read-only agent actions (same DTOs as Rovo, CSV text under `importedText`) and must answer through `submit_answer`; ≤ 4 model calls and a 14 s deadline per question; every ID, number and date in the answer must come from structured tool fields of this request (never CSV free text or the question); one correction round names the rejected value; otherwise the rule-based answer is shown with `fallbackReason`. UI notice explains AI mode, verification and that reasoning is not verified.
+
+**Verified**
+- `npx vitest run`: **159 passed** (110 → 159), coverage 83 % statements. `npm run build` and `forge lint` clean.
+- Dev environment v6.0.0 → v6.6.0 (Runs on Atlassian eligible), installed on `utkirovm3.atlassian.net`. In Jira (Claude in Chrome):
+  - Copilot "Why is SHP-1004 a problem and what should I do?" and "Which delays hurt stock the most?" → AI answers with cited, verified IDs; "Where is SHP-9999?" → AI says no such shipment, nothing invented; footer "mode: AI (Forge LLM), IDs and numbers verified".
+  - Messy supplier export pasted into the new box → AI mapped all 13 columns correctly (Notes column with an injected instruction ignored) → admin confirmed → 3 of 4 rows imported, line 5 rejected ("abc" is not a whole number). Demo data reloaded afterwards.
+- Live findings fixed: empty assistant text blocks are rejected by the API (HTTP 400); the verifier caught a computed number (140 − 50) → added a correction round; tool-call arguments must be sent back as JSON strings although the SDK types say object.
+- **LLM usage on 2026-11-03 (dev):** 23 calls (21 OK, 2 HTTP 400 from the bugs above), 45.3 k input + 5.0 k output tokens ≈ **$0.07** at Haiku list prices ($1 / $5 per M tokens; Forge's own price may differ). A Copilot question takes 3–4 calls (≈ 1–1.5 ¢), a column mapping 1 call.
+
+**ecc review** (`ecc:typescript-reviewer`, `ecc:security-reviewer`) — fixed: fail-open budget and single shared cap, CSV free text / question numbers counting as evidence, too-broad ID pattern, missing date whitelist (today), truncated tool results counted as evidence, no deadline / `finish_reason: length` handling, header rewrite vs. parser quoting (stray quote, leading blank lines), pending mapping keyed by filename, one failing file hiding the others, silent mapping errors, `as Prompt` cast hiding a type mismatch, untrimmed log text.
+
+**Open / not verified**
+- File-picker upload of the messy CSV was not driven in the browser (cross-origin Forge iframe; native file dialog); the same server path was verified through the paste box and by tests.
+- Verification checks values, not reasoning: an AI recommendation once concluded "projected 140 will be below safety stock 50" from correct numbers. The UI says so; consider a deterministic check of comparisons later.
+- Usage counters are best effort (no atomic increment in KVS): parallel calls can overshoot a cap by a few.
+- Production still runs v2.1.0 without AI; deploying needs the author's approval (major version upgrade for installed sites).
 
 ## Phase 5 — Rovo agent
 

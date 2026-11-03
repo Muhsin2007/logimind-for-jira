@@ -11,15 +11,16 @@ Draft for the author to review and paste. Nothing here has been submitted.
 Small importers and distributors run purchasing and operations work in Jira, but their shipments and stock live in spreadsheets. Late containers and stock-outs are discovered too late, and nobody can say which delay actually hurts. We wanted the logistics picture — and the follow-up work — in the same place.
 
 ## What it does
-- **Validated import** of shipment and inventory CSVs: every rejected row is listed with its line and reason; nothing is used silently.
+- **Validated import** of shipment and inventory CSVs (or rows pasted from Excel): every rejected row is listed with its line and reason; nothing is used silently.
+- **AI column mapping**: a supplier export with its own column names is mapped by Claude (Forge LLM); the admin confirms, values are never changed, and every row is still validated.
 - **Transparent risk engine**: late shipments, ETA slips, missing ETAs and stock-outs, each with its evidence and rule version — a rule-based score, explicitly not a prediction.
 - **Dashboard, Shipments, Inventory and Risk Center** inside Jira, in Jira's own light/dark theme.
 - **One-click Jira issues** from any risk, created as the user, one per risk, with live status and a LogiMind panel on the issue showing the source shipment.
-- **Copilot**: ask "status of SHP-1004" or "today's risk summary" and get cited facts, evidence-based next steps (e.g. transfer exactly the missing units from a warehouse with surplus) and an explicit list of unknowns.
+- **AI Copilot**: ask anything about the data; Claude (Forge LLM) answers only through read-only tools, every cited ID, number and date is verified against the data, and anything unverifiable falls back to a deterministic rule-based answer.
 - **Rovo agent "LogiMind"** with four read-only actions so the same answers are available in Rovo chat.
 
 ## How we built it
-Atlassian Forge (Node 24 runtime) with a React Custom UI global page and issue panel, Forge KVS storage, Jira REST via `requestJira` as the user, and a `rovo:agent` with `action` modules. The logic is a pure, unit-tested TypeScript domain layer (110 tests, 81 % coverage) behind service and storage ports. No external backend, no egress — eligible for Runs on Atlassian.
+Atlassian Forge (Node 24 runtime) with a React Custom UI global page and issue panel, Forge KVS storage, Jira REST via `requestJira` as the user, and a `rovo:agent` with `action` modules. The logic is a pure, unit-tested TypeScript domain layer (159 tests, 83 % coverage) behind service and storage ports. AI features use Forge LLMs (Claude Haiku 4.5) behind a port with a deterministic fallback. No external backend, no egress — eligible for Runs on Atlassian.
 
 ## Challenges
 - Keeping data consistent in a key-value store: token-owned locks, batched writes and rollback of a failed import.
@@ -36,20 +37,21 @@ Atlassian Forge (Node 24 runtime) with a React Custom UI global page and issue p
 Deterministic rules plus honest uncertainty earn more trust than an impressive-sounding prediction. Forge's permission model (asUser, scopes, Runs on Atlassian) shaped the design for the better.
 
 ## What's next
-Optional Forge LLM provider behind the same read-only tools, scheduled CSV/API sync, per-project data scopes, and Marketplace listing.
+Days of cover and a what-if delay simulator, scheduled daily checks that open and update Jira issues, scheduled CSV/API sync, per-project data scopes, and Marketplace listing.
 
 ## AI disclosure
-- **In the product:** no AI model is called. The Copilot is rule-based. The Rovo agent uses Atlassian Rovo's own model; LogiMind only supplies read-only action results.
+- **In the product:** LogiMind calls **Atlassian-hosted Forge LLMs** (Claude Haiku 4.5) for two features: proposing a CSV column mapping (headers plus three cleaned sample rows are sent; the admin confirms) and the Copilot (the model may only call read-only tools; its IDs, numbers and dates are verified before display). No external AI provider is used and no data leaves Atlassian. A deterministic rule-based copilot is the fallback. The Rovo agent uses Atlassian Rovo's own model; LogiMind only supplies read-only action results.
 - **In development:** the code, tests and documentation were written with the help of an AI coding assistant (Anthropic Claude via Claude Code), directed and reviewed by the author. All features were verified with automated tests and in a live Jira site.
 
 ## Third-party services and data
 - Atlassian Forge, Jira Cloud REST API, Forge KVS, Atlassian Rovo (platform services).
 - Open-source libraries: React, Vite, `@forge/*` SDKs, Vitest (dev).
+- Forge LLMs (Atlassian-hosted Claude) for column mapping and the Copilot.
 - No external APIs, no external AI providers, no data leaves Atlassian.
 - Demo data is synthetic; supplier and product names are fictional.
 
 ## Known limitations
-See README "Known limitations" — rule-based copilot, UTC dates, 2,000-row cap, English UI, app-wide data visibility, Rovo agent not exercised live on the author's Free-plan site.
+See README "Known limitations" — AI reasoning is not verified (only its data), daily AI call cap, UTC dates, 2,000-row cap, English UI, app-wide data visibility, Rovo agent not exercised live on the author's Free-plan site.
 
 ## Bonus write-up (Best Agents)
 LogiMind ships a `rovo:agent` with four `action` modules (`actionVerb: GET`): risk summary (filters: severity, risk type), shipment lookup, inventory lookup and linked-Jira-issue lookup. The agent's instructions require data-only, cited answers split into facts / interpretation / next steps / unknowns, forbid predictions and write claims, and treat imported CSV text as untrusted data. Actions validate every model-supplied input, return `found:false` instead of guessing, hide issues the user cannot see, and are the same tools the in-app Copilot uses — so the agent and the app always agree.

@@ -10,9 +10,11 @@
 | D6 | 2026-11-02 | `@forge/kvs` behind a repository port; 2,000-row import cap | Recommended storage; keeps every resolver response well inside Forge limits |
 | D7 | 2026-11-02 | Data-changing actions require Jira ADMINISTER (server-side, asUser) | Data is site-wide; any viewer could otherwise wipe or replace it |
 | D8 | 2026-11-02 | Issues created asUser from a fixed ADF template; one per risk; status by issue ID | Jira permissions apply; no markup injection; links survive issue moves |
-| D9 | 2026-11-03 | No AI provider (user declined paid Forge LLMs); Copilot runs in rule-based mode, clearly labelled | Forge LLMs are billed to the developer with no free quota |
+| D9 | 2026-11-03 | ~~No AI provider (user declined paid Forge LLMs); Copilot runs in rule-based mode, clearly labelled~~ **Superseded by D15** | Forge LLMs are billed to the developer with no free quota |
 | D10 | 2026-11-03 | Rovo agent with read-only `GET` actions over the same toolbox; CSV text isolated as untrusted | Bonus eligibility with minimal risk; prompt-injection defence |
 | D11 | 2026-11-03 | Live Rovo verification deferred; QA continued | Rovo/Agent Studio not provisioned on the Free-plan developer site; enabling a paid trial is the user's decision |
 | D14 | 2026-11-03 | Adopt `docs/ROADMAP.md`: real AI via Forge LLMs (budget ≈ $10, Haiku), days of cover + what-if, closed-loop Jira automation, MCP as fallback bonus, design polish | Aim for a top-3 finish; supersedes D9 (no AI) once the LLM provider ships |
+| D15 | 2026-11-03 | Forge LLM (Claude Haiku 4.5) behind an `LlmPort` for AI column mapping and the AI Copilot; rules stay as fallback; 150 calls/day (copilot ≤ 120, ≤ 40 per person, fail closed); answers accepted only when every ID, number and date appears in tool results | Author-approved budget ≈ $10; Haiku is the cheapest Forge model; validation keeps "verified facts" honest |
+| D16 | 2026-11-03 | Column mapping changes only the header line; the existing validator runs on every row; Excel semicolon/tab files and pasted rows accepted | The model can never alter a value, and copying cells from Excel is the common real workflow |
 | D13 | 2026-11-03 | Keep the author's e-mail in commit history when publishing | Author's choice after the pre-publication scan flagged it |
 | D12 | 2026-11-03 | MIT license | Codegeist asks for an open-source license; MIT is the simplest permissive choice (author may change it) |

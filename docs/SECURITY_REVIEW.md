@@ -1,18 +1,19 @@
 # Security Review
 
-Last updated: 2026-11-02 (Phase 2). Reviewer: `ecc:security-reviewer`, plus `ecc:typescript-reviewer` and `ecc:react-reviewer` for related correctness issues.
+Last updated: 2026-11-03 (Roadmap week 1, Forge LLM). Reviewer: `ecc:security-reviewer`, plus `ecc:typescript-reviewer` and `ecc:react-reviewer` for related correctness issues.
 
 ## Threat model
 - Any Jira user who can open the LogiMind global page can call its resolvers.
 - Imported CSV content is untrusted and stored in app-level Forge KVS, shared across the site.
-- Later phases: Jira issue creation (`asUser`) and a Rovo agent that reads this data, so CSV text may reach an LLM.
+- Jira issue creation (`asUser`) and a Rovo agent read this data, so CSV text reaches an LLM.
+- Since week 1 the app itself calls Atlassian-hosted Forge LLMs (`llm` module): uploaded headers and three sample rows (column mapping, admins only) and read-only tool results (Copilot, any page viewer). The model has no write tools, and its output is shown as plain React text.
 
 ## Findings and status
 
 | # | Severity | Finding | Status |
 |---|---|---|---|
 | 1 | High | Import / demo load / delete open to every user | **Fixed** — server-side Jira `ADMINISTER` check (`src/auth/access.ts`) before every write; UI disables the controls for non-admins |
-| 2 | High | Prompt-injection surface: CSV free text (supplier, product, carrier…) will reach the Rovo agent | **Open — Phase 5 rule**: agent actions return structured fields, free text marked as untrusted data; agent stays read-only; issue text built from templates, never raw CSV |
+| 2 | High | Prompt-injection surface: CSV free text (supplier, product, carrier…) reaches the Rovo agent and the Forge LLM | **Mitigated** — structured DTOs, free text cleaned and isolated under `importedText`, read-only tools only, issue text from templates; AI answers are verified against structured fields only (week 1, #24–#26) |
 | 3 | Medium | Unbounded full scans / O(n²) per read; concurrent imports racing | **Fixed** — inbound index (linear), risk map, 2,000-row cap, atomic write lock with TTL, bounded-parallel batches |
 | 4 | Medium | Failed import leaves mixed dataset | **Fixed** — added keys rolled back on write failure; stale keys removed only after a full write |
 | 5 | Low | `Math.random` batch IDs | **Fixed** — `crypto.randomUUID()` |
@@ -44,6 +45,19 @@ Last updated: 2026-11-02 (Phase 2). Reviewer: `ecc:security-reviewer`, plus `ecc
 | 21 | Medium | Issue key returned for issues the user cannot see | **Fixed** — key only when the live (asUser) status is visible |
 | 22 | Info | Agent actions | All `GET`, no write tools; inputs validated; failures never fall back to memory |
 | 23 | Info | Data scope | Logistics data is app-wide: any page/agent user on the site can read it (by design) |
+
+## Week 1 additions (Forge LLM)
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 24 | Medium | Any viewer could use the whole daily AI budget (denial of service for admins' column mapping); the cap failed open on KVS errors | **Fixed** — copilot limited to 120 of 150 daily calls and 40 per person; counters fail closed. Residual: non-atomic counters may overshoot by a few under parallel calls |
+| 25 | Medium | IDs or numbers inside CSV free text (or typed in the question) could make a fabricated claim pass verification | **Fixed** — evidence only from identifier and numeric fields of tool results; `importedText` and the question never count (user-typed IDs only as "not found") |
+| 26 | Medium | Verification checks values, not meaning: a wrong conclusion from correct numbers is shown as AI mode | **Accepted, disclosed** — UI states that wording and reasoning are not verified; computed numbers are rejected |
+| 27 | Low-Medium | Header rewrite toggled quotes differently from the parser (stray `"` could swallow rows) | **Fixed** — shared `scanHeader` follows the parser; tests for stray quotes and leading blank lines |
+| 28 | Low-Medium | A hostile header could steer the model to a plausible but wrong mapping | **Mitigated** — admin confirms every mapping with first values shown; type warnings when samples do not fit a field; every row is still validated |
+| 29 | Low | Logs contained model / CSV text and raw API errors | **Fixed** — trimmed and cleaned; API message kept (≤ 200 chars) because it is the only diagnostic for request bugs; logs are developer-only |
+| 30 | Low | Truncated tool results counted as evidence | **Fixed** — oversized results are withheld and not counted |
+| 31 | Info | Data residency | Forge LLMs are Atlassian-hosted; no external AI provider or egress; Runs on Atlassian eligibility kept (verified by `forge deploy`) |
 
 ## Known limitations (accepted for now)
 - "Today" is evaluated in UTC, so users far from UTC may see a risk change day a few hours early or late.
