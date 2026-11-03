@@ -14,7 +14,7 @@ Deadline: **2026-12-22 12:00 PT** (2026-12-23 01:00 Tashkent). Rules read 2026-1
 ## Needs the author (approval or action)
 - [x] **Commit e-mail** — author decided (2026-11-03) to keep the personal address in commit metadata; history is not rewritten.
 - [ ] **Optional:** replace the developer site name in `docs/` with `<your-site>`.
-- [ ] **GitHub:** `gh auth login`, then approve creating a **public** repository and pushing.
+- [x] **GitHub:** public repository https://github.com/Muhsin2007/logimind-for-jira (MIT detected, `main`), created 2026-11-03 with the author's approval.
 - [ ] **Production deploy:** approve `forge deploy -e production` (judges should get the production environment).
 - [ ] **Install link:** Developer console → app → *Distribution* → enable sharing → copy the installation link (requires completing the distribution details).
 - [ ] **Rovo (bonus):** get a Rovo-enabled site (e.g. Jira Standard/Premium trial), install, and verify the agent live; otherwise do not select the bonus.
