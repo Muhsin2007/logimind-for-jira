@@ -217,7 +217,7 @@
 .result-fix { padding: var(--s3) var(--s4); border-top: 1px solid var(--border); background: var(--surface-2); color: var(--text-subtle); font-size: var(--fs-md); }
 .mapping { margin-top: var(--s3); padding: var(--s4); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r-lg); background: var(--surface); display: flex; flex-direction: column; gap: var(--s3); }
 .mapping .table-wrap { box-shadow: none; }
-.mapping select.input { width: 100%; min-width: 220px; }
+.mapping td select.input { width: 100%; min-width: 220px; }
 .format-code { font-family: var(--mono); font-size: var(--fs-sm); color: var(--text-subtle); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s2) var(--s3); overflow-wrap: anywhere; margin: 4px 0 var(--s3); }
 .danger-zone { border-color: color-mix(in srgb, var(--sev-critical) 30%, var(--border)); }
 

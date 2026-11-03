@@ -195,6 +195,8 @@ textarea.input { height: auto; padding: 8px 10px; }
 .row-accent-critical td:first-child { box-shadow: inset 3px 0 0 var(--sev-critical); }
 .row-accent-high td:first-child { box-shadow: inset 3px 0 0 var(--sev-high); }
 .panel > .table-wrap { border: 0; box-shadow: none; border-radius: 0 0 var(--r-lg) var(--r-lg); margin: 0 calc(-1 * var(--s5)) calc(-1 * var(--s5)); border-top: 1px solid var(--border); }
+/* A table followed by notes keeps its own bottom edge. */
+.panel > .table-wrap:not(:last-child) { margin-bottom: var(--s3); border-bottom: 1px solid var(--border); border-radius: 0; }
 .panel > .table-wrap .table th:first-child, .panel > .table-wrap .table td:first-child { padding-left: var(--s5); }
 .panel > .table-wrap .table th:last-child, .panel > .table-wrap .table td:last-child { padding-right: var(--s5); }
 

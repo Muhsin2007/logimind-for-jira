@@ -8,10 +8,11 @@ export function IssueContext() {
   const state = useAsync(() => call('getIssueContext'), []);
   const { t, fmt } = useI18n();
 
-  if (state.status === 'loading') return <Loading variant="inline" />;
-  if (state.status === 'error') return <ErrorState message={state.message} onRetry={state.reload} />;
+  // Every state sits in .sidebar so the panel keeps Jira's own background.
+  if (state.status === 'loading') return <div className="sidebar"><Loading variant="inline" /></div>;
+  if (state.status === 'error') return <div className="sidebar"><ErrorState message={state.message} onRetry={state.reload} /></div>;
   const { link, currentRisk, shipment } = state.data;
-  if (!link) return <p className="muted">{t.notFromLogiMind}</p>;
+  if (!link) return <div className="sidebar"><p className="muted small">{t.notFromLogiMind}</p></div>;
 
   return (
     <div className="sidebar">
