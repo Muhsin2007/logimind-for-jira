@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { useDeferredValue, useId, useMemo, useState, type ReactNode } from 'react';
 import { delayCandidates, MAX_DELAY_DAYS, simulateDelay, type StockOutlook } from '../../../../src/domain/what-if';
 import { call, useAsync } from '../api';
 import { CoverValue, EmptyState, ErrorState, Loading, Panel, SeverityBadge } from '../components';
@@ -24,6 +24,8 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
   const [shipmentId, setShipmentId] = useState(whatIfShipmentId ?? '');
   const [supplier, setSupplier] = useState('');
   const [delay, setDelay] = useState(DEFAULT_DELAY);
+  // The slider moves at once; the simulation and its announcement follow when React has time.
+  const deferredDelay = useDeferredValue(delay);
 
   const candidates = useMemo(() => (state.status === 'ready' ? delayCandidates(state.data.shipments, state.data.today) : null), [state]);
   const selectedId = candidates?.shipments.some((s) => s.id === shipmentId) ? shipmentId : candidates?.shipments[0]?.id ?? '';
@@ -31,9 +33,9 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
 
   const result = useMemo(() => {
     if (state.status !== 'ready') return null;
-    const scenario = mode === 'shipment' ? { shipmentIds: selectedId ? [selectedId] : [], delayDays: delay } : { supplier: selectedSupplier, delayDays: delay };
+    const scenario = mode === 'shipment' ? { shipmentIds: selectedId ? [selectedId] : [], delayDays: deferredDelay } : { supplier: selectedSupplier, delayDays: deferredDelay };
     return simulateDelay(state.data.shipments, state.data.items, state.data.today, scenario);
-  }, [state, mode, selectedId, selectedSupplier, delay]);
+  }, [state, mode, selectedId, selectedSupplier, deferredDelay]);
 
   if (state.status === 'loading') return <Loading label={t.loadingWhatIf} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={state.reload} />;
@@ -42,6 +44,8 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
 
   const worse = result.rows.filter((r) => r.worse).length;
   const delayText = t.delayDays(result.delayDays);
+  // A shipment sent from the drawer that can no longer be delayed (e.g. it became overdue).
+  const preselectMissing = mode === 'shipment' && !!whatIfShipmentId && shipmentId === whatIfShipmentId && selectedId !== whatIfShipmentId;
 
   return (
     <div className="stack">
@@ -86,13 +90,14 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
               max={MAX_DELAY_DAYS}
               step={1}
               value={delay}
-              aria-valuetext={delayText}
+              aria-valuetext={t.delayDays(delay)}
               onChange={(e) => setDelay(Number(e.target.value))}
             />
-            <output htmlFor={`${ids}-delay`} className="slider-value">{delayText}</output>
+            <output htmlFor={`${ids}-delay`} className="slider-value">{t.delayDays(delay)}</output>
           </div>
         </div>
 
+        {preselectMissing && <p className="notice" role="note">{t.notUpcoming(whatIfShipmentId)}</p>}
         <p className="whatif-summary" aria-live="polite">
           {result.delayDays === 0 ? t.moveSlider : worse > 0 ? <strong className="text-danger">{t.summaryWorse(worse, delayText)}</strong> : t.summaryNone(delayText)}
         </p>

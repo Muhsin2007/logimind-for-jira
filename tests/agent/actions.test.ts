@@ -111,7 +111,13 @@ describe('Rovo actions', () => {
     expect(await simulateDelay(demoTools(), { delayDays: 3 })).toMatchObject({ ok: false });
     expect(await simulateDelay(demoTools(), { shipmentId: 'SHP-1001', delayDays: 31 })).toMatchObject({ ok: false, error: 'delayDays must be a whole number from 1 to 30' });
     expect(await simulateDelay(demoTools(), { shipmentId: 'SHP-1001', delayDays: 'x' })).toMatchObject({ ok: false });
-    expect(await simulateDelay(demoTools(), { shipmentId: 'SHP-9999', delayDays: 3 })).toMatchObject({ ok: true, found: false });
+    const missing = await simulateDelay(demoTools(), { shipmentId: 'SHP-9999', delayDays: 3 });
+    expect(missing).toMatchObject({ ok: true, found: false, importedText: { suppliersWithUpcomingShipments: expect.arrayContaining(['NorthStar Parts']) } });
+  });
+
+  it('simulate-delay delays only the shipment when a supplier is given as well', async () => {
+    const out = (await simulateDelay(demoTools(), { shipmentId: 'SHP-1001', supplier: 'NorthStar Parts', delayDays: 5 })) as { delayedShipments: { shipmentId: string }[] };
+    expect(out.delayedShipments.map((s) => s.shipmentId)).toEqual(['SHP-1001']);
   });
 
   it('never names an issue the user cannot see', async () => {

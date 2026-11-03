@@ -261,6 +261,12 @@ describe('LlmCopilot', () => {
     expect(JSON.parse(requests[1].messages.at(-1)!.content)).toMatchObject({ ok: true, found: true, delayDays: 10 });
   });
 
+  it('never reads "1,50" as 150: a comma is only a thousands separator', async () => {
+    const bad = { ...GOOD_ANSWER, facts: [{ text: 'SHP-1004 has 1,50 units of SKU-04.', ids: ['SHP-1004'] }], recommendations: [], unknowns: [] };
+    const { llm } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', bad)), reply(call('submit_answer', bad)));
+    expect((await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?')).mode).toBe('rules');
+  });
+
   it('answers in English by default', async () => {
     const { llm, requests } = scripted(reply(call('get_shipment', { shipmentId: 'SHP-1004' })), reply(call('submit_answer', GOOD_ANSWER)));
     await new LlmCopilot(demoToolbox(), llm).ask('SHP-1004?');

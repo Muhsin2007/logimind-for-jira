@@ -53,8 +53,8 @@ const DATA_TOOLS: Record<string, { tool: LlmTool; run: (tools: CopilotToolbox, a
   simulate_delay: {
     run: simulateDelay,
     tool: fn('simulate_delay', 'Read-only what-if: stock positions today and if one shipment (or every upcoming shipment of a supplier) arrives delayDays later: low-stock severity, days of cover, stock-out date. Nothing is saved.', {
-      shipmentId: str('Exact shipment ID to delay, e.g. SHP-1001.'),
-      supplier: str('Or: supplier name, to delay all its upcoming shipments.'),
+      shipmentId: str('Exact shipment ID to delay, e.g. SHP-1001. Give this OR supplier, not both.'),
+      supplier: str('Or: supplier name exactly as returned by a tool, to delay all its upcoming shipments. Ignored when shipmentId is given.'),
       delayDays: { type: 'integer', description: 'Delay in days, 1-30.' },
     }, ['delayDays']),
   },
@@ -313,4 +313,6 @@ function fn(name: string, description: string, properties: Record<string, unknow
 }
 
 const list = (value: unknown, max: number): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
-const toNumber = (s: string) => Number(s.replace(/,/g, '').replace(/\.$/, ''));
+/** A comma is only a thousands separator (1,234); "2,5" is ambiguous (a decimal in Russian) and never matches. */
+const THOUSANDS = /^\d{1,3}(?:,\d{3})+(?:\.\d+)?\.?$/;
+const toNumber = (s: string) => (s.includes(',') && !THOUSANDS.test(s) ? NaN : Number(s.replace(/,/g, '').replace(/\.$/, '')));

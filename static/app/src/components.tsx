@@ -23,7 +23,9 @@ export function StatusBadge({ status }: { status: Shipment['status'] }) {
 /** Days of cover with the projected stock-out date; a dash when the file has no daily usage. */
 export function CoverValue({ cover }: { cover: CoverProjection }) {
   const { t, fmt } = useI18n();
-  if (cover.dailyUsage === null || cover.dailyUsage <= 0) return <span className="muted" title={t.noUsage}>—</span>;
+  if (cover.dailyUsage === null || cover.dailyUsage <= 0) {
+    return <span className="muted" title={t.noUsage}><span aria-hidden="true">—</span><span className="sr-only">{t.noUsage}</span></span>;
+  }
   if (cover.daysOfCover === null) return <span>{t.beyondHorizon(COVER_HORIZON_DAYS)}</span>;
   return (
     <span className={cover.daysOfCover <= 7 ? 'text-danger' : undefined}>

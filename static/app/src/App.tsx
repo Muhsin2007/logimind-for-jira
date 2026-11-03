@@ -41,15 +41,22 @@ export function App() {
   const [whatIfShipmentId, setWhatIfShipmentId] = useState<string | null>(null);
 
   const onDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
+  // A preselected shipment applies to one visit only; normal navigation starts fresh.
+  const selectTab = useCallback((next: Tab) => {
+    setWhatIfShipmentId(null);
+    setTab(next);
+  }, []);
   const nav = useMemo<NavProps>(
-    () => ({ dataVersion, onOpenShipment: setShipmentId, onNavigate: setTab, onDataChanged, whatIfShipmentId }),
-    [dataVersion, onDataChanged, whatIfShipmentId],
+    () => ({ dataVersion, onOpenShipment: setShipmentId, onNavigate: selectTab, onDataChanged, whatIfShipmentId }),
+    [dataVersion, onDataChanged, whatIfShipmentId, selectTab],
   );
   const closeDrawer = useCallback(() => setShipmentId(null), []);
   const simulate = useCallback((id: string) => {
     setWhatIfShipmentId(id);
     setShipmentId(null);
     setTab('whatIf');
+    // The drawer's opener is gone with the old tab, so focus moves to the What-if tab.
+    requestAnimationFrame(() => document.getElementById('tab-whatIf')?.focus());
   }, []);
 
   // While the drawer is open the page behind it is inert (React 18 has no `inert` prop).
@@ -68,7 +75,7 @@ export function App() {
     if (!(e.key in target)) return;
     e.preventDefault();
     const next = TABS[target[e.key]];
-    setTab(next);
+    selectTab(next);
     document.getElementById(`tab-${next}`)?.focus();
   };
 
@@ -94,7 +101,7 @@ export function App() {
             aria-controls="tabpanel"
             tabIndex={tab === id ? 0 : -1}
             className={`tab${tab === id ? ' tab-active' : ''}`}
-            onClick={() => setTab(id)}
+            onClick={() => selectTab(id)}
             onKeyDown={(e) => onTabKey(e, i)}
           >
             {t.tabs[id]}
@@ -124,6 +131,7 @@ function LanguageSwitch() {
           className={`btn btn-subtle lang-btn${locale === l ? ' lang-active' : ''}`}
           aria-pressed={locale === l}
           title={LOCALE_NAMES[l]}
+          aria-label={LOCALE_NAMES[l]}
           onClick={() => setLocale(l)}
         >
           {l.toUpperCase()}

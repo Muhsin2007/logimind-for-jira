@@ -339,6 +339,7 @@ export const en = {
   shipmentOption: (id: string, sku: string, warehouse: string, date: string) => `${id} · ${sku} → ${warehouse} · ${date}`,
   delayBy: 'Delay',
   delayDays: (n: number) => `${n} day${n === 1 ? '' : 's'}`,
+  notUpcoming: (id: string) => `${id} cannot be delayed here: it is no longer an open, upcoming shipment. Showing the next one instead.`,
   moveSlider: 'Move the slider to see the effect of a delay.',
   summaryWorse: (count: number, delay: string) => `With a delay of ${delay}, ${count} stock position${count === 1 ? '' : 's'} get${count === 1 ? 's' : ''} worse.`,
   summaryNone: (delay: string) => `With a delay of ${delay}, no stock position gets worse.`,

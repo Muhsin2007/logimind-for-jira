@@ -186,6 +186,9 @@ export async function getLinkedJiraIssue(tools: CopilotToolbox, payload: unknown
   return withFreshness(tools, { found: true, riskId: safeId(link.riskId), issue: issueDto(link), createdAt: link.createdAt });
 }
 
+/** Keeps a supplier-wide simulation inside the model's tool-result budget. */
+const MAX_LISTED = 15;
+
 const outlookDto = (o: StockOutlook) => ({ projectedWithin7Days: o.projected, lowStockSeverity: o.lowStock, ...coverDto(o.cover) });
 
 /** Read-only what-if: one shipment or every upcoming shipment of a supplier, delayed by 1-30 days. */
@@ -199,16 +202,25 @@ export async function simulateDelay(tools: CopilotToolbox, payload: unknown): Pr
   const supplier = typeof rawSupplier === 'string' && rawSupplier.trim() ? rawSupplier.trim().slice(0, MAX_TEXT) : null;
   if (!id && !supplier) return invalid('Give a shipmentId or a supplier');
 
-  const r = await tools.simulateDelay({ shipmentIds: id ? [id] : [], supplier: supplier ?? undefined, delayDays });
+  // A shipment ID is the narrower choice: the supplier is ignored then, so one shipment never silently becomes many.
+  const r = await tools.simulateDelay(id ? { shipmentIds: [id], delayDays } : { supplier: supplier ?? undefined, delayDays });
   if (r.shipments.length === 0) {
-    return withFreshness(tools, { found: false, message: 'No open, upcoming shipment matches. Overdue, delivered and cancelled shipments cannot be simulated. Do not guess.' });
+    const suppliers = (await tools.listDelaySuppliers()).slice(0, MAX_LISTED).map((s) => cleanText(s));
+    return withFreshness(tools, {
+      found: false,
+      message: 'No open, upcoming shipment matches. Overdue, delivered and cancelled shipments cannot be simulated. Do not guess.',
+      importedText: { suppliersWithUpcomingShipments: suppliers },
+    });
   }
   return withFreshness(tools, {
     found: true,
     readOnly: true,
     note: 'Simulation only: nothing was changed. today = current data; withDelay = if the shipments arrive delayDays later.',
     delayDays: r.delayDays,
-    delayedShipments: r.shipments.map((s) => ({
+    totalDelayedShipments: r.shipments.length,
+    totalPositions: r.rows.length,
+    truncated: r.shipments.length > MAX_LISTED || r.rows.length > MAX_LISTED ? `Only the first ${MAX_LISTED} are listed; worse positions come first.` : undefined,
+    delayedShipments: r.shipments.slice(0, MAX_LISTED).map((s) => ({
       shipmentId: s.id,
       sku: s.sku,
       qty: s.qty,
@@ -216,7 +228,7 @@ export async function simulateDelay(tools: CopilotToolbox, payload: unknown): Pr
       delayedArrival: s.to,
       importedText: { supplier: cleanText(s.supplier), warehouse: cleanText(s.warehouse) },
     })),
-    positions: r.rows.map((row) => ({
+    positions: r.rows.slice(0, MAX_LISTED).map((row) => ({
       sku: row.sku,
       safetyStock: row.safetyStock,
       worse: row.worse,

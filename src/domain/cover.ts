@@ -12,9 +12,9 @@ export interface CoverProjection {
   dailyUsage: number | null;
   /** Whole days until stock runs out; null without usage or when it lasts beyond the horizon. */
   daysOfCover: number | null;
-  /** First day with no stock left (later arrivals may refill it). */
+  /** Day during which stock runs out (later arrivals may refill it). */
   stockOutDate: IsoDate | null;
-  /** First day stock is below safety stock. */
+  /** Day during which stock first drops below safety stock (same convention as the stock-out date). */
   belowSafetyDate: IsoDate | null;
   /** No stock-out within COVER_HORIZON_DAYS. */
   beyondHorizon: boolean;
@@ -36,7 +36,8 @@ export interface CoverInput {
  */
 export function projectCover(input: CoverInput, today: IsoDate): CoverProjection {
   const usage = input.dailyUsage;
-  if (usage === null || usage <= 0) {
+  // NaN or Infinity can only come from hand-edited storage; treat it as "no usage", never as "safe".
+  if (usage === null || !Number.isFinite(usage) || usage <= 0) {
     return { dailyUsage: usage, daysOfCover: null, stockOutDate: null, belowSafetyDate: null, beyondHorizon: false };
   }
   const arrivals = input.arrivals

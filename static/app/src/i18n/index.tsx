@@ -12,7 +12,10 @@ const STORAGE_KEY = 'logimind.locale';
 function readLocale(): UiLocale {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved === 'ru' || saved === 'en' ? saved : 'en';
+    const locale: UiLocale = saved === 'ru' ? 'ru' : 'en';
+    // Set before the first paint so screen readers start in the right language.
+    document.documentElement.lang = locale;
+    return locale;
   } catch {
     return 'en';
   }

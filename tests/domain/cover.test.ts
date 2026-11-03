@@ -46,6 +46,10 @@ describe('projectCover', () => {
     expect(project(20, 5, [], 0).belowSafetyDate).toBeNull();
   });
 
+  it('treats corrupt (non-finite) usage as unknown, never as covered', () => {
+    expect(project(10, Number.NaN)).toMatchObject({ daysOfCover: null, beyondHorizon: false });
+  });
+
   it('stops at the horizon', () => {
     expect(project(1_000_000, 1)).toMatchObject({ daysOfCover: null, stockOutDate: null, beyondHorizon: true });
     expect(project(COVER_HORIZON_DAYS * 2 - 1, 2)).toMatchObject({ daysOfCover: COVER_HORIZON_DAYS - 1, beyondHorizon: false });

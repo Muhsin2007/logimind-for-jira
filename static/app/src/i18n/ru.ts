@@ -370,6 +370,7 @@ export const ru: Messages = {
   shipmentOption: (id, sku, warehouse, date) => `${id} · ${sku} → ${warehouse} · ${date}`,
   delayBy: 'Задержка',
   delayDays: (n) => `${n} ${plural(n, 'день', 'дня', 'дней')}`,
+  notUpcoming: (id) => `${id} нельзя задержать: это уже не открытая предстоящая поставка. Показана следующая.`,
   moveSlider: 'Передвиньте ползунок, чтобы увидеть эффект задержки.',
   summaryWorse: (count, delay) => `При задержке на ${delay} ${plural(count, 'ухудшится', 'ухудшатся', 'ухудшатся')} ${count} ${plural(count, 'складская позиция', 'складские позиции', 'складских позиций')}.`,
   summaryNone: (delay) => `При задержке на ${delay} ни одна складская позиция не ухудшится.`,
