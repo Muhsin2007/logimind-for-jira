@@ -8,6 +8,7 @@ export const loopEn = {
   lastCheck: (when: string, manual: boolean) => `Last check ${when} · ${manual ? 'run manually' : 'scheduled'}`,
   noCheckYet: 'No daily check has run yet. Jira runs the scheduled check once a day at a time it chooses; an administrator can run it now.',
   baseline: 'First check: the open risks were recorded. From the next check on, new and resolved risks are listed here.',
+  noData: 'No data was imported at the last check, so nothing was compared. Import shipments or inventory; the next check records the open risks.',
   newRisks: 'New',
   resolved: 'Resolved in data',
   stillCritical: 'Still critical',

@@ -113,7 +113,9 @@ export function DailyBriefing({ dataVersion, onOpenShipment, onOpenInventory, on
             <p className="small muted" role="status">
               {t.loop.lastCheck(fmt.dateTime(run.checkedAt), run.trigger === 'manual')} · {t.loop.openTotal(run.counts.open)}
             </p>
-            {run.baseline ? (
+            {run.noData ? (
+              <Callout tone="info">{t.loop.noData}</Callout>
+            ) : run.baseline ? (
               <Callout tone="info">{t.loop.baseline}</Callout>
             ) : (
               <div className="brief-grid">

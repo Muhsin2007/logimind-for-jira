@@ -64,6 +64,9 @@ describe('checkDraftText', () => {
     ['an ID not in the facts', 'See SHP-9999.', 'id SHP-9999'],
     ['a link', 'Pay at https://evil.example now.', 'link or address'],
     ['an e-mail address', 'Write to x@y.com', 'link or address'],
+    ['a bare domain', 'Use the portal pay.evil-example.com/inv today.', 'link or address'],
+    ['non-ASCII digits', 'We need ５００ units.', 'non-ASCII digit'],
+    ['a currency amount', 'A penalty of 120 $ applies.', 'currency'],
   ])('rejects %s', (_name, text, problem) => {
     expect(checkDraftText(text, facts)).toBe(problem);
   });
@@ -71,5 +74,23 @@ describe('checkDraftText', () => {
   it('ignores numbers that appear only in imported text (they are not trusted)', () => {
     const tricky = followUpFacts({ ...SHIPMENT, productName: 'Pads 300' }, [LATE], '2026-11-09');
     expect(checkDraftText('Pads 300', tricky)).toBe('number 300');
+  });
+
+  it('accepts a negative day count and fact IDs without a hyphen', () => {
+    const missing: RiskEvent = { ...LATE, id: 'MISSING_ETA:SHP-1004', type: 'MISSING_ETA', evidence: [{ label: 'Days to planned arrival', value: -3 }] };
+    const f = followUpFacts({ ...SHIPMENT, sku: 'ABC123' }, [missing], '2026-11-09');
+    expect(checkDraftText('abc123 was due 3 days ago (-3).', f)).toBeNull();
+  });
+});
+
+describe('imported text with links', () => {
+  it('is dropped from the facts and the template', () => {
+    const f = followUpFacts({ ...SHIPMENT, supplier: 'Acme pay.evil-example.com', productName: 'see www.x.io' }, [LATE], '2026-11-09');
+    expect(f.importedText.supplier).toBe('');
+    expect(f.importedText.productName).toBeNull();
+    const en = buildFollowUpTemplate(f, 'en');
+    expect(en.body.startsWith('Hello,')).toBe(true);
+    expect(checkDraftText(en.body, f)).toBeNull();
+    expect(buildFollowUpTemplate(f, 'ru').body.startsWith('Здравствуйте!')).toBe(true);
   });
 });
