@@ -47,7 +47,7 @@ Last updated: 2026-11-03 (Phase 6). App version under test: **v5.9.0** (Forge de
 
 ## Roadmap week 3: closed loop in Jira (2026-11-09, dev v6.13.0)
 
-Automated: 260/260 tests in 22 files, `tsc --noEmit` (backend + UI) clean, `build:ui` exit 0, `forge lint` "No issues found". Deployed to **development only** (6.13.0); production v3.1.0 untouched.
+Automated: 260/260 tests in 22 files, `tsc --noEmit` (backend + UI) clean, `build:ui` exit 0, `forge lint` "No issues found". Deployed to development (6.13.0) and then, with the author's approval, to production (v3.2.0, deployed by the author; `forge lint` clean). Production has no site installation (`forge install list` shows only the dev site), so it was not checked live; it runs the same code as dev 6.13.0.
 
 | Area | Status | Evidence |
 |---|---|---|
