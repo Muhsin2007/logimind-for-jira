@@ -45,6 +45,27 @@ Last updated: 2026-11-03 (Phase 6). App version under test: **v5.9.0** (Forge de
 | EN/RU switch | ✅ unit + live | `tests/ui/i18n.test.ts` (same keys/arity, no empty text, Russian really translated, plurals, risk titles); TypeScript `ru: Messages`. Live: English by default, RU on Dashboard/Inventory/What-if/Shipments/drawer/Copilot, choice kept after reload |
 | Not verified live | ⛔ | Issue sidebar and column-mapping step in Russian (covered by type check only); Rovo action |
 
+## Roadmap week 3: closed loop in Jira (2026-11-09, dev v6.13.0)
+
+Automated: 260/260 tests in 22 files, `tsc --noEmit` (backend + UI) clean, `build:ui` exit 0, `forge lint` "No issues found". Deployed to **development only** (6.13.0); production v3.1.0 untouched.
+
+| Area | Status | Evidence |
+|---|---|---|
+| Daily check diff + snapshot | ✅ unit, ✅ live (baseline) | `daily-check-service.test.ts`, `kvs-check-store.test.ts` (two day slots, half-overwritten snapshot, clear). Live: "Run check now" → "First check: the open risks were recorded…", 28 open, manual run |
+| No-data run | ✅ unit | Run without imported data is stored as `noData` (no snapshot), briefing shows the import hint |
+| Auto-create (off by default, max 5, pending carry-over, FORBIDDEN message) | ✅ unit, ⛔ live | Live: badge "Auto-create off" shown; issues not auto-created live because the first run is a baseline and a second day's diff is needed |
+| "Resolved in data" comment (marker first, rollback, never transitions) | ✅ unit, ⛔ live | Needs a risk to disappear between two checks with a linked issue |
+| Scheduled trigger | ⛔ live | Jira picks the time; not observed yet on dev |
+| Supplier follow-up draft | ✅ unit, ✅ live | Validator tests (dates, IDs, numbers, links/domains, currency, non-ASCII digits). Live on SHP-1014: AI draft accepted, "Written by AI…" note, facts correct (PO-514, 45 × SKU-05, planned 2026-11-01, 8 days overdue) |
+| Copy button | 🟡 live | Clicked; no error shown, but the "Copied" state was not observed in the screenshot |
+| EN/RU strings | ✅ unit | `i18n.test.ts` (same keys/arity); RU not checked live for the new panels |
+
+Known limitations (accepted for week 3):
+- The legacy `snap:meta` key from an earlier dev build is ignored, so the first check after deploy is always a baseline.
+- Auto-created issues are created asApp; if the app's project permissions are removed later, runs report FORBIDDEN until an admin restores them.
+- Issue keys of auto-created issues are shown in the briefing to everyone who can open LogiMind.
+- Follow-up drafts: number words ("nine days") are not checked by the validator; only digits are.
+
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
 

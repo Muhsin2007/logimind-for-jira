@@ -26,7 +26,8 @@ Judging criteria are equally weighted: Technological implementation, Design, Pot
 |---|---|
 | 1 | ✅ Done — dev v6.6.0, production v3.0.0 |
 | 2 | ✅ Done — dev v6.8.0, production v3.1.0: days of cover + projected stock-out, what-if delay simulator (UI, Copilot tool, Rovo action); plus EN/RU language switch (author request) |
-| 3–7 | Not started |
+| 3 | ✅ Done (2026-11-09) — dev v6.13.0, production untouched (v3.1.0): daily check (`scheduledTrigger` + admin "Run check now"), daily briefing, auto-create of issues (off by default, max 5/run), one "resolved in data" comment per linked issue, AI supplier follow-up draft (copy only, validated, template fallback), EN/RU |
+| 4–7 | Not started |
 
 ## Presentation story
 Persona: a purchasing lead at an auto-parts importer in Tashkent who spends an hour every morning in spreadsheets. Show before/after with concrete numbers from the demo data.
