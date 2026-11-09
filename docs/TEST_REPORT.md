@@ -68,7 +68,7 @@ Known limitations (accepted for week 3):
 
 ## Roles: owner / managers / viewers (2026-11-09, dev v7.0.0)
 
-Automated: 313/313 tests in 26 files, `tsc --noEmit` (backend + UI) clean, `build:ui` exit 0, `forge lint` clean apart from the expected major-version approval (new scope `read:jira-user`). Deployed to development with `--approve MAJOR_VERSION_RULE` (7.0.0) and the dev site upgraded with `forge install --upgrade` (scope accepted). **Production not deployed.**
+Automated: 313/313 tests in 26 files, `tsc --noEmit` (backend + UI) clean, `build:ui` exit 0, `forge lint` clean apart from the expected major-version approval (new scope `read:jira-user`). Deployed to development with `--approve MAJOR_VERSION_RULE` (7.0.0) and the dev site upgraded with `forge install --upgrade` (scope accepted). With the author's approval, deployed to production as **v4.0.0** (`--approve MAJOR_VERSION_RULE`, `build:ui` exit 0). Production has no site installation (`forge install list` shows only the dev site), so there was nothing to upgrade and it was not checked live; it runs the same code as dev 7.0.0. A site that installs it later will be asked to consent to `read:jira-user`.
 
 | Area | Status | Evidence |
 |---|---|---|
