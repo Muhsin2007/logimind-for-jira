@@ -4,6 +4,7 @@
  */
 import type { FieldSpec } from '../domain/column-mapping';
 import type { CoverProjection } from '../domain/cover';
+import type { RiskRef } from '../domain/risk-diff';
 import type {
   ImportBatch,
   ImportKind,
@@ -19,6 +20,7 @@ import type {
   Shipment,
 } from '../domain/types';
 
+export type { RiskRef };
 export type { CoverProjection, FieldSpec, ImportBatch, ImportKind, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
 
 /** UI language chosen by the person; English is the default. */
@@ -152,6 +154,49 @@ export interface CopilotAnswer {
   dataAsOf: { today: IsoDate; shipmentsImportedAt: string | null; inventoryImportedAt: string | null };
 }
 
+/** Result of one daily check (scheduled or "Run check now"); stored as the latest run. */
+export interface CheckRun {
+  checkedAt: string;
+  today: IsoDate;
+  trigger: 'schedule' | 'manual';
+  /** First check: open risks were recorded, nothing is reported as new or resolved. */
+  baseline: boolean;
+  counts: { open: number; newRisks: number; resolved: number; stillOpen: number; stillCritical: number };
+  /** Capped lists for the briefing; counts hold the full numbers. */
+  newRisks: RiskRef[];
+  resolved: RiskRef[];
+  stillCritical: RiskRef[];
+  autoCreate: {
+    enabled: boolean;
+    created: { riskId: string; issueKey: string }[];
+    /** Newly critical risks left without an issue (cap reached, error, or no project set). */
+    notCreated: number;
+    error: { code: string; message: string } | null;
+  };
+  comments: { added: { riskId: string; issueKey: string }[]; error: string | null };
+}
+
+export interface LoopSettings {
+  /** Create Jira issues for newly critical risks during the daily check. Off by default. */
+  autoCreate: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface DailyBriefing {
+  lastRun: CheckRun | null;
+  autoCreate: boolean;
+}
+
+export interface FollowUpDraft {
+  /** 'llm' = drafted by the Forge LLM and checked against the facts; 'template' = fixed text. */
+  mode: 'llm' | 'template';
+  shipmentId: string;
+  subject: string;
+  body: string;
+  fallbackReason?: string;
+}
+
 export interface ResolverApi {
   getHealth: { payload: void; result: { status: 'ok'; timestamp: string } };
   getAccess: { payload: void; result: { canManageData: boolean } };
@@ -173,4 +218,9 @@ export interface ResolverApi {
   saveJiraConfig: { payload: { projectKey: string; issueTypeId: string }; result: JiraConfig };
   getIssueContext: { payload: void; result: IssueContextData };
   askCopilot: { payload: { question: string; locale?: UiLocale }; result: CopilotAnswer };
+  getDailyBriefing: { payload: void; result: DailyBriefing };
+  runDailyCheck: { payload: void; result: { ok: true; run: CheckRun } | { ok: false; code: 'BUSY'; message: string } };
+  getLoopSettings: { payload: void; result: Omit<LoopSettings, 'updatedBy'> };
+  saveLoopSettings: { payload: { autoCreate: boolean }; result: Omit<LoopSettings, 'updatedBy'> };
+  draftFollowUp: { payload: { shipmentId: string; locale?: UiLocale }; result: FollowUpDraft | null };
 }

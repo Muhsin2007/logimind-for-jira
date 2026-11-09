@@ -109,6 +109,11 @@ modules:
           type: integer
           required: true
           description: Whole number of days from 1 to 30.
+  # Daily risk check (new / resolved / still open). Forge picks the time of day; admins can also run it now.
+  scheduledTrigger:
+    - key: logimind-daily-check
+      function: dailyCheck
+      interval: day
   # Atlassian-hosted Claude (Forge LLMs): AI column mapping and the AI Copilot. No external provider.
   llm:
     - key: logimind-llm
@@ -127,6 +132,9 @@ modules:
       handler: index.agentLinkedIssue
     - key: agentSimulateDelay
       handler: index.agentSimulateDelay
+    - key: dailyCheck
+      handler: index.runDailyCheck
+      timeoutSeconds: 300
 resources:
   - key: main
     path: static/app/build
@@ -141,5 +149,6 @@ permissions:
     - storage:app
     # ADMINISTER check (mypermissions), project/issue-type lists, issue status search.
     - read:jira-work
-    # Creating an issue from a risk, as the user who clicks "Create Jira issue".
+    # Creating an issue from a risk (as the user who clicks, or as the app in the daily check), and
+    # the daily check's one-time "resolved in data" comment. Issues are never transitioned.
     - write:jira-work

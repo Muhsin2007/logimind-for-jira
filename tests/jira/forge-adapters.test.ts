@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requestJira = vi.hoisted(() => vi.fn());
+const appRequestJira = vi.hoisted(() => vi.fn());
 vi.mock('@forge/api', () => ({
-  default: { asUser: () => ({ requestJira }) },
+  default: { asUser: () => ({ requestJira }), asApp: () => ({ requestJira: appRequestJira }) },
   route: (s: TemplateStringsArray, ...v: unknown[]) => String.raw({ raw: s }, ...v),
 }));
 
@@ -89,6 +90,33 @@ describe('ForgeJiraGateway lookups', () => {
       { id: '3', name: 'Подзадача', subtask: true, hierarchyLevel: -1 },
     ] }));
     expect(await new ForgeJiraGateway().listIssueTypes('SCRUM')).toEqual([{ id: '1', name: 'Задача' }]);
+  });
+});
+
+describe('ForgeJiraGateway as the app', () => {
+  it('adds an ADF comment as the app, never as the user', async () => {
+    appRequestJira.mockResolvedValue(res(201));
+    const body = { version: 1 as const, type: 'doc' as const, content: [] };
+    await new ForgeJiraGateway('app').addComment('100', body);
+    expect(requestJira).not.toHaveBeenCalled();
+    const [path, init] = appRequestJira.mock.calls[0];
+    expect(path).toBe('/rest/api/3/issue/100/comment');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ body });
+  });
+
+  it('rejects a non-numeric issue ID and maps a 403 to FORBIDDEN', async () => {
+    const gw = new ForgeJiraGateway('app');
+    await expect(gw.addComment('../x', { version: 1, type: 'doc', content: [] })).rejects.toMatchObject({ code: 'VALIDATION' });
+    appRequestJira.mockResolvedValue(res(403));
+    await expect(gw.addComment('100', { version: 1, type: 'doc', content: [] })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('creates issues as the app when constructed for the app', async () => {
+    appRequestJira.mockResolvedValue(res(201, { id: '7', key: 'SCRUM-7' }));
+    await new ForgeJiraGateway('app').createIssue('SCRUM', '1', content);
+    expect(appRequestJira).toHaveBeenCalledTimes(1);
+    expect(requestJira).not.toHaveBeenCalled();
   });
 });
 

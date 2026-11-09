@@ -1,5 +1,5 @@
 import api, { route } from '@forge/api';
-import type { IssueContent } from '../domain/jira-issue';
+import type { AdfDoc, IssueContent } from '../domain/jira-issue';
 import type { LiveIssue, StatusCategory } from '../domain/types';
 import { JiraError, type JiraGateway, type JiraIssueType, type JiraProject } from './jira-gateway';
 
@@ -35,16 +35,25 @@ async function toJiraError(res: ForgeResponse, action: string): Promise<JiraErro
 
 const CATEGORIES: StatusCategory[] = ['new', 'indeterminate', 'done'];
 
+/** 'user' = the person using the app (Jira permissions apply to them); 'app' = the app's own user, for scheduled work. */
+export type JiraPrincipal = 'user' | 'app';
+
 export class ForgeJiraGateway implements JiraGateway {
+  constructor(private readonly principal: JiraPrincipal = 'user') {}
+
+  private client() {
+    return this.principal === 'app' ? api.asApp() : api.asUser();
+  }
+
   async listCreatableProjects(): Promise<JiraProject[]> {
-    const res = await api.asUser().requestJira(route`/rest/api/3/project/search?action=create&maxResults=100&orderBy=name`, { headers: JSON_HEADERS });
+    const res = await this.client().requestJira(route`/rest/api/3/project/search?action=create&maxResults=100&orderBy=name`, { headers: JSON_HEADERS });
     if (!res.ok) throw await toJiraError(res, 'list projects');
     const body = (await res.json()) as { values?: { id: string; key: string; name: string }[] };
     return (body.values ?? []).map(({ id, key, name }) => ({ id, key, name }));
   }
 
   async listIssueTypes(projectKey: string): Promise<JiraIssueType[]> {
-    const res = await api.asUser().requestJira(route`/rest/api/3/issue/createmeta/${projectKey}/issuetypes`, { headers: JSON_HEADERS });
+    const res = await this.client().requestJira(route`/rest/api/3/issue/createmeta/${projectKey}/issuetypes`, { headers: JSON_HEADERS });
     if (!res.ok) throw await toJiraError(res, `list issue types for ${projectKey}`);
     const body = (await res.json()) as { issueTypes?: RawIssueType[]; values?: RawIssueType[] };
     // Standard-level types only: sub-tasks need a parent and epics (level 1) are not risk work items.
@@ -54,7 +63,7 @@ export class ForgeJiraGateway implements JiraGateway {
   }
 
   async createIssue(projectKey: string, issueTypeId: string, content: IssueContent): Promise<{ id: string; key: string }> {
-    const res = await api.asUser().requestJira(route`/rest/api/3/issue`, {
+    const res = await this.client().requestJira(route`/rest/api/3/issue`, {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({
@@ -77,7 +86,7 @@ export class ForgeJiraGateway implements JiraGateway {
     const ids = issueIds.filter((id) => /^\d{1,18}$/.test(id)); // numeric only: safe to embed in JQL
     for (let i = 0; i < ids.length; i += SEARCH_CHUNK) {
       const chunk = ids.slice(i, i + SEARCH_CHUNK);
-      const res = await api.asUser().requestJira(route`/rest/api/3/search/jql`, {
+      const res = await this.client().requestJira(route`/rest/api/3/search/jql`, {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify({ jql: `id in (${chunk.join(',')})`, fields: ['status'], maxResults: SEARCH_CHUNK }),
@@ -98,11 +107,21 @@ export class ForgeJiraGateway implements JiraGateway {
   }
 
   async issueExists(issueId: string): Promise<'exists' | 'hidden' | 'missing'> {
-    const res = await api.asUser().requestJira(route`/rest/api/3/issue/${issueId}?fields=status`, { headers: JSON_HEADERS });
+    const res = await this.client().requestJira(route`/rest/api/3/issue/${issueId}?fields=status`, { headers: JSON_HEADERS });
     if (res.ok) return 'exists';
     if (res.status === 404) return 'missing';
     if (res.status === 403 || res.status === 401) return 'hidden';
     throw await toJiraError(res, 'check the linked issue');
+  }
+
+  async addComment(issueId: string, body: AdfDoc): Promise<void> {
+    if (!/^\d{1,18}$/.test(issueId)) throw new JiraError('VALIDATION', 'Invalid issue ID');
+    const res = await this.client().requestJira(route`/rest/api/3/issue/${issueId}/comment`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) throw await toJiraError(res, 'add a comment');
   }
 }
 

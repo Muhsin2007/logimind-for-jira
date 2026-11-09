@@ -111,6 +111,8 @@ export interface IssueLink {
   projectKey: string;
   createdAt: string;
   createdBy: string | null;
+  /** When the daily check commented "resolved in data" on the issue (set once, never repeated). */
+  resolvedNotedAt?: string;
 }
 
 export type StatusCategory = 'new' | 'indeterminate' | 'done' | 'unknown';

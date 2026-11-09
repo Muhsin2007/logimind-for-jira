@@ -1,4 +1,4 @@
-import type { IssueContent } from '../domain/jira-issue';
+import type { AdfDoc, IssueContent } from '../domain/jira-issue';
 import type { LiveIssue } from '../domain/types';
 
 export type JiraErrorCode = 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'RATE_LIMITED' | 'UNKNOWN';
@@ -24,7 +24,7 @@ export interface JiraIssueType {
   name: string;
 }
 
-/** Port for the Jira REST calls LogiMind makes, always as the current user. */
+/** Port for the Jira REST calls LogiMind makes: as the current user, or as the app in background jobs. */
 export interface JiraGateway {
   /** Projects in which the current user can create issues. */
   listCreatableProjects(): Promise<JiraProject[]>;
@@ -35,4 +35,6 @@ export interface JiraGateway {
   getIssueStatuses(issueIds: string[]): Promise<Map<string, LiveIssue>>;
   /** 'hidden' = exists but the user cannot see it; it still blocks a duplicate. */
   issueExists(issueId: string): Promise<'exists' | 'hidden' | 'missing'>;
+  /** Adds a comment (ADF). Never changes the issue's status or fields. */
+  addComment(issueId: string, body: AdfDoc): Promise<void>;
 }

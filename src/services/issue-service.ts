@@ -80,12 +80,13 @@ export class IssueService {
    * Creates one Jira issue for a currently active risk, as the current user. A risk whose
    * issue still exists (even one the user cannot see) is never duplicated.
    */
-  async createIssueForRisk(riskId: string, createdBy: string | null): Promise<CreateIssueOutcome> {
+  /** `activeRisks` lets a caller that has just evaluated the risks (the daily check) skip a second evaluation. */
+  async createIssueForRisk(riskId: string, createdBy: string | null, activeRisks?: RiskEvent[]): Promise<CreateIssueOutcome> {
     const config = await this.links.getConfig();
     if (!config) {
       return { ok: false, code: 'NOT_CONFIGURED', message: 'A Jira administrator must choose a project for LogiMind issues in Import & Settings.' };
     }
-    const risk = (await this.logistics.listRisks()).risks.find((r) => r.id === riskId);
+    const risk = (activeRisks ?? (await this.logistics.listRisks()).risks).find((r) => r.id === riskId);
     if (!risk) {
       return { ok: false, code: 'RISK_NOT_FOUND', message: 'This risk is no longer active in the current data, so no issue was created.' };
     }

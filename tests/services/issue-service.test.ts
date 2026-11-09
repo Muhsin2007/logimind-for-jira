@@ -36,6 +36,7 @@ function setup(opts: { config?: JiraConfig | null; risks?: RiskEvent[]; existing
     // The issue was moved since the link was saved: ID 100 is now OPS-3.
     getIssueStatuses: vi.fn().mockResolvedValue(new Map([['100', { issueKey: 'OPS-3', statusName: 'In Progress', category: 'indeterminate' }]])),
     issueExists: vi.fn().mockResolvedValue('exists'),
+    addComment: vi.fn().mockResolvedValue(undefined),
   } satisfies JiraGateway;
   const logistics = {
     listRisks: vi.fn().mockResolvedValue({ today: '2026-11-02', risks: opts.risks ?? [RISK] }),

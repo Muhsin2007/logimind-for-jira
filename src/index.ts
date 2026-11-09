@@ -1,20 +1,30 @@
 import Resolver from '@forge/resolver';
 import { ColumnMapper } from './ai/column-mapper';
+import { FollowUpDrafter } from './ai/follow-up-drafter';
 import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from './agent/actions';
 import { canManageData, requireDataManager } from './auth/access';
 import { LlmCopilot } from './copilot/llm-copilot';
 import { MAX_QUESTION } from './copilot/rule-based-copilot';
 import { ServiceToolbox } from './copilot/tools';
 import { MAX_COLUMNS } from './domain/column-mapping';
+import { followUpFacts } from './domain/follow-up';
 import { ForgeJiraGateway } from './jira/forge-jira-gateway';
 import { ForgeLlm } from './llm/forge-llm';
+import { DailyCheckService } from './services/daily-check-service';
 import { IssueService, ISSUE_ID } from './services/issue-service';
 import { LogisticsService } from './services/logistics-service';
+import { CheckBusyError } from './storage/check-store';
+import { KvsCheckStore } from './storage/kvs-check-store';
 import { KvsIssueLinkRepository } from './storage/kvs-issue-links';
 import { KvsLogisticsRepository } from './storage/kvs-repository';
 
 const logistics = new LogisticsService(new KvsLogisticsRepository());
-const issues = new IssueService(logistics, new KvsIssueLinkRepository(), new ForgeJiraGateway());
+const issueLinks = new KvsIssueLinkRepository();
+const issues = new IssueService(logistics, issueLinks, new ForgeJiraGateway());
+// Background work (the daily check) has no user, so it calls Jira as the app: the app's user needs
+// Browse projects, Create issues and Add comments in the configured project.
+const appJira = new ForgeJiraGateway('app');
+const dailyCheck = new DailyCheckService(logistics, new KvsCheckStore(), issueLinks, new IssueService(logistics, issueLinks, appJira), appJira);
 const llm = new ForgeLlm();
 const resolver = new Resolver();
 
@@ -116,7 +126,52 @@ resolver.define('saveJiraConfig', async ({ payload, context }) => {
   return issues.saveConfig(projectKey, issueTypeId, accountOf(context));
 });
 
+// Daily check: the briefing is readable by everyone; running it and the auto-create switch are admin-only.
+resolver.define('getDailyBriefing', () => dailyCheck.getBriefing());
+resolver.define('runDailyCheck', async () => {
+  await requireDataManager();
+  try {
+    return { ok: true as const, run: await dailyCheck.run('manual') };
+  } catch (err) {
+    if (err instanceof CheckBusyError) return { ok: false as const, code: 'BUSY' as const, message: err.message };
+    throw err;
+  }
+});
+resolver.define('getLoopSettings', async () => {
+  await requireDataManager();
+  const { autoCreate, updatedAt } = await dailyCheck.getSettings();
+  return { autoCreate, updatedAt };
+});
+resolver.define('saveLoopSettings', async ({ payload, context }) => {
+  const autoCreate = (payload as Record<string, unknown> | null)?.autoCreate;
+  if (typeof autoCreate !== 'boolean') throw new Error('Invalid request: "autoCreate" must be true or false');
+  await requireDataManager();
+  const saved = await dailyCheck.saveSettings(autoCreate, accountOf(context));
+  return { autoCreate: saved.autoCreate, updatedAt: saved.updatedAt };
+});
+
+// Supplier follow-up: a draft to copy, never sent. Only shipments with an open risk get one.
+resolver.define('draftFollowUp', async ({ payload, context }) => {
+  const locale = (payload as Record<string, unknown> | null)?.locale === 'ru' ? 'ru' : 'en';
+  const detail = await logistics.getShipment(requireString(payload, 'shipmentId', 64));
+  const risks = detail?.risks.filter((r) => r.entityType === 'shipment') ?? [];
+  if (!detail || risks.length === 0) return null;
+  const facts = followUpFacts(detail.shipment, risks, risks[0].evaluatedOn);
+  return new FollowUpDrafter(llm, { accountId: accountOf(context) }).draft(facts, locale);
+});
+
 export const handler = resolver.getDefinitions();
+
+/** Scheduled trigger (daily). Forge ignores the return value and does not retry, so failures are logged. */
+export async function runDailyCheck(): Promise<void> {
+  try {
+    const run = await dailyCheck.run('schedule');
+    console.log('LogiMind daily check done', { baseline: run.baseline, ...run.counts, created: run.autoCreate.created.length, comments: run.comments.added.length });
+  } catch (err) {
+    if (err instanceof CheckBusyError) console.log('LogiMind daily check skipped: another check is running');
+    else console.error('LogiMind daily check failed', { error: err instanceof Error ? err.message : String(err) });
+  }
+}
 
 // Rovo agent actions (read-only). Each request gets its own toolbox: one consistent data read.
 const toolbox = () => new ServiceToolbox(logistics, issues);

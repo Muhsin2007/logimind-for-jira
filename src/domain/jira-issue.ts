@@ -56,3 +56,25 @@ export function buildIssueContent(risk: RiskEvent): IssueContent {
     labels: ['logimind', `logimind-${risk.type.toLowerCase().replace(/_/g, '-')}`],
   };
 }
+
+export type AdfDoc = IssueContent['description'];
+
+/**
+ * Comment for an issue whose risk no longer appears in the data. It states what LogiMind saw and
+ * leaves the decision to people: the issue is never transitioned or closed by the app.
+ */
+export function buildResolvedComment(link: { riskId: string; riskType: RiskType; entityType: string; entityKey: string }, today: string): AdfDoc {
+  return {
+    version: 1,
+    type: 'doc',
+    content: [
+      paragraph(
+        text('LogiMind: ', true),
+        text(`the ${RISK_TYPE_LABEL[link.riskType]} risk for ${link.entityType} ${link.entityKey} is `),
+        text('resolved in data', true),
+        text(` as of ${today}: the latest imported data no longer meets the rule.`),
+      ),
+      paragraph(text(`Risk ID: ${link.riskId}. LogiMind does not change the status of this issue; close it when the work is done.`)),
+    ],
+  };
+}
