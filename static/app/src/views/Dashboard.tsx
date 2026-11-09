@@ -146,7 +146,7 @@ export function Dashboard({ dataVersion, onOpenShipment, onNavigate, onDataChang
         </Panel>
       </div>
 
-      <DailyBriefing dataVersion={dataVersion} onOpenShipment={onOpenShipment} onOpenInventory={() => onNavigate('inventory')} />
+      <DailyBriefing dataVersion={dataVersion} onOpenShipment={onOpenShipment} onOpenInventory={() => onNavigate('inventory')} onDataChanged={onDataChanged} />
 
       <Panel title={t.recentImports} icon="file">
         {recentImports.length === 0 ? (

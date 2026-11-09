@@ -5,19 +5,35 @@ import { Icon } from '../icons';
 
 type State = { status: 'idle' } | { status: 'loading' } | { status: 'ready'; draft: FollowUpDraft | null } | { status: 'error'; message: string };
 
-/** Copies text; the Jira iframe may block the async clipboard API, so fall back to a selection copy. */
-async function copyText(text: string, fallback: HTMLTextAreaElement | null): Promise<boolean> {
+/** Selection copy through a temporary off-screen textarea; never throws. */
+function copyWithSelection(text: string): boolean {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  try {
+    area.select();
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    area.remove();
+  }
+}
+
+/**
+ * Copies text. The Jira iframe may block the async clipboard API; where it is missing the selection
+ * copy runs at once (inside the click's user activation), otherwise it is the fallback.
+ */
+async function copyText(text: string): Promise<boolean> {
+  if (!window.isSecureContext || !navigator.clipboard?.writeText) return copyWithSelection(text);
   try {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    if (!fallback) return false;
-    const previous = fallback.value;
-    fallback.value = text;
-    fallback.select();
-    const ok = document.execCommand('copy');
-    fallback.value = previous;
-    return ok;
+    return copyWithSelection(text);
   }
 }
 
@@ -25,7 +41,6 @@ async function copyText(text: string, fallback: HTMLTextAreaElement | null): Pro
 export function FollowUp({ shipmentId }: { shipmentId: string }) {
   const [state, setState] = useState<State>({ status: 'idle' });
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const body = useRef<HTMLTextAreaElement>(null);
   const timer = useRef<number>();
   const { t, locale } = useI18n();
   const subjectId = useId();
@@ -34,6 +49,7 @@ export function FollowUp({ shipmentId }: { shipmentId: string }) {
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const draft = async () => {
+    if (state.status === 'loading') return;
     setState({ status: 'loading' });
     setCopy('idle');
     try {
@@ -44,7 +60,7 @@ export function FollowUp({ shipmentId }: { shipmentId: string }) {
   };
 
   const onCopy = async (d: FollowUpDraft) => {
-    const ok = await copyText(`${d.subject}\n\n${d.body}`, body.current);
+    const ok = await copyText(`${d.subject}\n\n${d.body}`);
     setCopy(ok ? 'copied' : 'failed');
     window.clearTimeout(timer.current);
     if (ok) timer.current = window.setTimeout(() => setCopy('idle'), 2500);
@@ -52,9 +68,9 @@ export function FollowUp({ shipmentId }: { shipmentId: string }) {
 
   const ready = state.status === 'ready' ? state.draft : null;
   return (
-    <div className="followup">
+    <div className="followup" aria-busy={state.status === 'loading'}>
       <div className="drawer-actions">
-        <button type="button" className="btn" onClick={() => void draft()} disabled={state.status === 'loading'}>
+        <button type="button" className="btn" onClick={() => void draft()} aria-disabled={state.status === 'loading'}>
           <Icon name="send" /> {state.status === 'loading' ? t.loop.drafting : t.loop.draftButton}
         </button>
       </div>
@@ -72,12 +88,15 @@ export function FollowUp({ shipmentId }: { shipmentId: string }) {
           <label className="field" htmlFor={bodyId}>
             <span className="field-label">{t.loop.message}</span>
           </label>
-          <textarea id={bodyId} ref={body} className="input followup-body" readOnly value={ready.body} rows={9} />
+          <textarea id={bodyId} className="input followup-body" readOnly value={ready.body} rows={9} />
           <div className="row">
             <button type="button" className="btn btn-primary btn-sm" onClick={() => void onCopy(ready)}>
               <Icon name={copy === 'copied' ? 'check' : 'file'} size={14} /> {copy === 'copied' ? t.loop.copied : t.loop.copy}
             </button>
-            <span role="status" className="small">{copy === 'failed' ? <span className="text-danger">{t.loop.copyFailed}</span> : null}</span>
+            <span role="status" className="small">
+              {copy === 'failed' && <span className="text-danger">{t.loop.copyFailed}</span>}
+              {copy === 'copied' && <span className="text-success">{t.loop.copied}</span>}
+            </span>
           </div>
         </div>
       )}

@@ -216,7 +216,7 @@ export function ShipmentDrawer({ id, onClose, onSimulate }: { id: string; onClos
                     ))}
                   </ul>
                 )}
-                {data.risks.length > 0 && <FollowUp key={id} shipmentId={id} />}
+                {data.risks.some((r) => r.entityType === 'shipment') && <FollowUp key={id} shipmentId={id} />}
               </Section>
             </>
           )}

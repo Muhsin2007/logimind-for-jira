@@ -35,6 +35,7 @@ export const loopEn = {
   lastChanged: (when: string) => `Changed ${when}`,
   adminOnly: 'Only Jira administrators can change automation.',
   lastRunErrors: 'Problems in the last check',
+  askAdmin: 'Ask a Jira administrator to fix this.',
 
   draftButton: 'Draft supplier follow-up',
   drafting: 'Drafting…',

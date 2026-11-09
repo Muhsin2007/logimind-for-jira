@@ -34,6 +34,7 @@ export const loopRu: LoopMessages = {
   lastChanged: (when: string) => `Изменено ${when}`,
   adminOnly: 'Менять автоматизацию могут только администраторы Jira.',
   lastRunErrors: 'Проблемы последней проверки',
+  askAdmin: 'Попросите администратора Jira это исправить.',
 
   draftButton: 'Черновик письма поставщику',
   drafting: 'Готовим черновик…',
