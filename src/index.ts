@@ -2,14 +2,19 @@ import Resolver from '@forge/resolver';
 import { ColumnMapper } from './ai/column-mapper';
 import { FollowUpDrafter } from './ai/follow-up-drafter';
 import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from './agent/actions';
-import { canManageData, requireDataManager } from './auth/access';
+import { ForbiddenError } from './auth/access';
 import { LlmCopilot } from './copilot/llm-copilot';
 import { MAX_QUESTION } from './copilot/rule-based-copilot';
 import { ServiceToolbox } from './copilot/tools';
 import { MAX_COLUMNS } from './domain/column-mapping';
 import { followUpFacts } from './domain/follow-up';
+import { RoleError } from './domain/roles';
 import { ForgeJiraGateway } from './jira/forge-jira-gateway';
+import { ForgeUserDirectory } from './jira/forge-user-directory';
 import { ForgeLlm } from './llm/forge-llm';
+import type { RoleOutcome } from './shared/api';
+import { RoleService } from './services/role-service';
+import { KvsRoleStore } from './storage/kvs-role-store';
 import { DailyCheckService } from './services/daily-check-service';
 import { IssueService, ISSUE_ID } from './services/issue-service';
 import { LogisticsService } from './services/logistics-service';
@@ -26,6 +31,7 @@ const issues = new IssueService(logistics, issueLinks, new ForgeJiraGateway());
 const appJira = new ForgeJiraGateway('app');
 const dailyCheck = new DailyCheckService(logistics, new KvsCheckStore(), issueLinks, new IssueService(logistics, issueLinks, appJira), appJira);
 const llm = new ForgeLlm();
+const roles = new RoleService(new KvsRoleStore(), new ForgeUserDirectory());
 const resolver = new Resolver();
 
 function requireString(payload: unknown, field: string, maxLength: number): string {
@@ -50,7 +56,40 @@ const accountOf = (context: Context | undefined) => context?.accountId ?? null;
 
 // Reads: any user who can open the page.
 resolver.define('getHealth', () => ({ status: 'ok' as const, timestamp: new Date().toISOString() }));
-resolver.define('getAccess', async () => ({ canManageData: await canManageData() }));
+resolver.define('getAccess', ({ context }) => roles.access(accountOf(context)));
+resolver.define('getRoles', () => roles.getRoles());
+
+// Roles: the owner manages managers; Jira site admins may claim or take over ownership.
+// RoleService checks the caller on the server and again on the state read under the roles lock.
+async function roleChange(change: () => Promise<void>): Promise<RoleOutcome> {
+  try {
+    await change();
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ForbiddenError) return { ok: false, code: 'FORBIDDEN', message: err.message };
+    if (err instanceof RoleError) return { ok: false, code: err.code, message: err.message };
+    // Jira or storage failures: logged here, a generic outcome for the caller.
+    console.warn('LogiMind role change failed', { error: err instanceof Error ? err.message : String(err) });
+    return { ok: false, code: 'UNKNOWN', message: 'Jira or LogiMind storage did not answer. Try again.' };
+  }
+}
+const targetOf = (payload: unknown) => (payload as Record<string, unknown> | null)?.accountId;
+resolver.define('claimOwnership', ({ payload, context }) =>
+  roleChange(() => roles.claimOwnership(accountOf(context), (payload as Record<string, unknown> | null)?.expectOwner)),
+);
+resolver.define('addManager', ({ payload, context }) => roleChange(() => roles.addManager(accountOf(context), targetOf(payload))));
+resolver.define('removeManager', ({ payload, context }) => roleChange(() => roles.removeManager(accountOf(context), targetOf(payload))));
+resolver.define('transferOwnership', ({ payload, context }) => roleChange(() => roles.transferOwnership(accountOf(context), targetOf(payload))));
+resolver.define('searchUsers', async ({ payload, context }) => {
+  try {
+    return { ok: true as const, users: await roles.searchUsers(accountOf(context), (payload as Record<string, unknown> | null)?.query) };
+  } catch (err) {
+    if (err instanceof ForbiddenError) return { ok: false as const, code: 'FORBIDDEN' as const, message: err.message };
+    if (err instanceof RoleError) return { ok: false as const, code: 'INVALID' as const, message: err.message };
+    console.warn('LogiMind people search failed', { error: err instanceof Error ? err.message : String(err) });
+    return { ok: false as const, code: 'UNKNOWN' as const, message: 'Jira could not search people right now.' };
+  }
+});
 resolver.define('getDashboard', () => logistics.getDashboard());
 resolver.define('listShipments', () => logistics.listShipments());
 resolver.define('getShipment', ({ payload }) => logistics.getShipment(requireString(payload, 'id', 64)));
@@ -66,7 +105,8 @@ resolver.define('askCopilot', ({ payload, context }) => {
   return new LlmCopilot(new ServiceToolbox(logistics, issues), llm, { accountId: accountOf(context) }).ask(requireString(payload, 'question', MAX_QUESTION), locale);
 });
 
-// Issue creation runs as the user, so Jira's own project permissions decide who may create.
+// Issue creation runs as the user, so Jira's own project permissions decide who may create; it is not
+// a LogiMind role right (viewers who may create issues in Jira can create one per risk, see D21).
 resolver.define('createIssueForRisk', ({ payload, context }) =>
   issues.createIssueForRisk(requireString(payload, 'riskId', 200), accountOf(context)),
 );
@@ -79,17 +119,17 @@ resolver.define('getIssueContext', ({ context }) => {
   return issues.getIssueContext(id, String(issue?.key ?? ''));
 });
 
-// Writes that change site-wide data or settings: Jira administrators only, checked server-side.
+// Writes that change site-wide data or settings: the LogiMind owner and managers (Jira admins until an owner is set), checked server-side.
 resolver.define('importCsv', async ({ payload, context }) => {
   const filename = requireString(payload, 'filename', 260);
   const content = requireString(payload, 'content', 1_100_000);
-  await requireDataManager();
+  await roles.requireDataManager(accountOf(context));
   return logistics.importCsv(filename, content, accountOf(context));
 });
 // AI column mapping costs a model call, so it is limited to the people who may import.
-resolver.define('proposeColumnMapping', async ({ payload }) => {
+resolver.define('proposeColumnMapping', async ({ payload, context }) => {
   const content = requireString(payload, 'content', 1_100_000);
-  await requireDataManager();
+  await roles.requireDataManager(accountOf(context));
   return new ColumnMapper(llm).propose(content);
 });
 resolver.define('importCsvWithMapping', async ({ payload, context }) => {
@@ -98,15 +138,15 @@ resolver.define('importCsvWithMapping', async ({ payload, context }) => {
   const kind = requireString(payload, 'kind', 20);
   if (kind !== 'shipments' && kind !== 'inventory') throw new Error('Invalid request: "kind" must be shipments or inventory');
   const mapping = requireMapping(payload);
-  await requireDataManager();
+  await roles.requireDataManager(accountOf(context));
   return logistics.importCsvWithMapping(filename, content, kind, mapping, accountOf(context));
 });
 resolver.define('loadDemoData', async ({ context }) => {
-  await requireDataManager();
+  await roles.requireDataManager(accountOf(context));
   return logistics.loadDemoData(accountOf(context));
 });
-resolver.define('clearData', async () => {
-  await requireDataManager();
+resolver.define('clearData', async ({ context }) => {
+  await roles.requireDataManager(accountOf(context));
   const result = await logistics.clearData();
   await issues.clearLinks();
   // The daily check forgets its snapshots too, so the next check is a baseline, not "everything resolved".
@@ -116,25 +156,25 @@ resolver.define('clearData', async () => {
   });
   return result;
 });
-resolver.define('listJiraProjects', async () => {
-  await requireDataManager();
+resolver.define('listJiraProjects', async ({ context }) => {
+  await roles.requireDataManager(accountOf(context));
   return issues.listProjects();
 });
-resolver.define('listJiraIssueTypes', async ({ payload }) => {
-  await requireDataManager();
+resolver.define('listJiraIssueTypes', async ({ payload, context }) => {
+  await roles.requireDataManager(accountOf(context));
   return issues.listIssueTypes(requireString(payload, 'projectKey', 20));
 });
 resolver.define('saveJiraConfig', async ({ payload, context }) => {
   const projectKey = requireString(payload, 'projectKey', 20);
   const issueTypeId = requireString(payload, 'issueTypeId', 20);
-  await requireDataManager();
+  await roles.requireDataManager(accountOf(context));
   return issues.saveConfig(projectKey, issueTypeId, accountOf(context));
 });
 
-// Daily check: the briefing is readable by everyone; running it and the auto-create switch are admin-only.
+// Daily check: the briefing is readable by everyone; running it and the auto-create switch need the data-manager role.
 resolver.define('getDailyBriefing', () => dailyCheck.getBriefing());
-resolver.define('runDailyCheck', async () => {
-  await requireDataManager();
+resolver.define('runDailyCheck', async ({ context }) => {
+  await roles.requireDataManager(accountOf(context));
   try {
     return { ok: true as const, run: await dailyCheck.run('manual') };
   } catch (err) {
@@ -142,15 +182,15 @@ resolver.define('runDailyCheck', async () => {
     throw err;
   }
 });
-resolver.define('getLoopSettings', async () => {
-  await requireDataManager();
+resolver.define('getLoopSettings', async ({ context }) => {
+  await roles.requireDataManager(accountOf(context));
   const { autoCreate, updatedAt } = await dailyCheck.getSettings();
   return { autoCreate, updatedAt };
 });
 resolver.define('saveLoopSettings', async ({ payload, context }) => {
   const autoCreate = (payload as Record<string, unknown> | null)?.autoCreate;
   if (typeof autoCreate !== 'boolean') throw new Error('Invalid request: "autoCreate" must be true or false');
-  await requireDataManager();
+  await roles.requireDataManager(accountOf(context));
   const saved = await dailyCheck.saveSettings(autoCreate, accountOf(context));
   return { autoCreate: saved.autoCreate, updatedAt: saved.updatedAt };
 });

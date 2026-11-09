@@ -5,6 +5,7 @@
 import type { FieldSpec } from '../domain/column-mapping';
 import type { CoverProjection } from '../domain/cover';
 import type { RiskRef } from '../domain/risk-diff';
+import type { Access, Role, RoleAction, RoleErrorCode } from '../domain/roles';
 import type {
   ImportBatch,
   ImportKind,
@@ -201,9 +202,35 @@ export interface FollowUpDraft {
   fallbackReason?: string;
 }
 
+/** A person as Jira shows them to the viewer; null name = deleted or not visible ("unavailable user"). */
+export interface UserRef {
+  accountId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+export interface RolesView {
+  owner: (UserRef & { since: string }) | null;
+  managers: (UserRef & { addedAt: string })[];
+  /** Newest first, at most 50 entries. */
+  log: { at: string; action: RoleAction; actor: UserRef; target: UserRef }[];
+}
+
+export type { Access, Role, RoleAction };
+
+/** Result of a role change; failures carry a code the UI turns into a message. */
+/** The client reloads the roles after every outcome. UNKNOWN: Jira or storage failed; details are only logged. */
+export type RoleOutcome = { ok: true } | { ok: false; code: RoleErrorCode | 'UNKNOWN'; message: string };
+
 export interface ResolverApi {
   getHealth: { payload: void; result: { status: 'ok'; timestamp: string } };
-  getAccess: { payload: void; result: { canManageData: boolean } };
+  getAccess: { payload: void; result: Access };
+  getRoles: { payload: void; result: RolesView };
+  claimOwnership: { payload: { expectOwner: string | null }; result: RoleOutcome };
+  addManager: { payload: { accountId: string }; result: RoleOutcome };
+  removeManager: { payload: { accountId: string }; result: RoleOutcome };
+  transferOwnership: { payload: { accountId: string }; result: RoleOutcome };
+  searchUsers: { payload: { query: string }; result: { ok: true; users: UserRef[] } | { ok: false; code: 'FORBIDDEN' | 'INVALID' | 'UNKNOWN'; message: string } };
   getDashboard: { payload: void; result: DashboardData };
   listShipments: { payload: void; result: { today: IsoDate; shipments: ShipmentRow[] } };
   getShipment: { payload: { id: string }; result: ShipmentDetail | null };

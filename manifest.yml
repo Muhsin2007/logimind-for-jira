@@ -152,3 +152,7 @@ permissions:
     # Creating an issue from a risk (as the user who clicks, or as the app in the daily check), and
     # the daily check's one-time "resolved in data" comment. Issues are never transitioned.
     - write:jira-work
+    # LogiMind roles: the owner finds people by name (user/search) and the Settings page shows
+    # names and avatars of the owner, managers and role-log entries (user/bulk). Always as the user,
+    # so Jira's own profile-visibility rules apply. Only account IDs are stored.
+    - read:jira-user

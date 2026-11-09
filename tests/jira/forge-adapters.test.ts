@@ -7,8 +7,8 @@ vi.mock('@forge/api', () => ({
   route: (s: TemplateStringsArray, ...v: unknown[]) => String.raw({ raw: s }, ...v),
 }));
 
-import { canManageData, ForbiddenError, requireDataManager } from '../../src/auth/access';
 import { ForgeJiraGateway } from '../../src/jira/forge-jira-gateway';
+import { ForgeUserDirectory } from '../../src/jira/forge-user-directory';
 import { JiraError } from '../../src/jira/jira-gateway';
 
 const res = (status: number, body: unknown = {}, jsonThrows = false) => ({
@@ -120,21 +120,47 @@ describe('ForgeJiraGateway as the app', () => {
   });
 });
 
-describe('access (Jira ADMINISTER check)', () => {
-  it('grants only an explicit havePermission: true', async () => {
+describe('ForgeUserDirectory (as the user)', () => {
+  it('treats only an explicit ADMINISTER havePermission: true as a site admin', async () => {
     requestJira.mockResolvedValue(res(200, { permissions: { ADMINISTER: { havePermission: true } } }));
-    expect(await canManageData()).toBe(true);
+    expect(await new ForgeUserDirectory().isSiteAdmin()).toBe(true);
     for (const body of [{ permissions: { ADMINISTER: { havePermission: false } } }, {}, { permissions: { ADMINISTER: { havePermission: 'yes' } } }]) {
       requestJira.mockResolvedValue(res(200, body));
-      expect(await canManageData()).toBe(false);
+      expect(await new ForgeUserDirectory().isSiteAdmin()).toBe(false);
     }
-  });
-
-  it('denies on a failed permission check and blocks data changes', async () => {
     const failed = res(500);
     requestJira.mockResolvedValue(failed);
-    expect(await canManageData()).toBe(false);
+    expect(await new ForgeUserDirectory().isSiteAdmin()).toBe(false);
     expect(failed.json).not.toHaveBeenCalled();
-    await expect(requireDataManager()).rejects.toBeInstanceOf(ForbiddenError);
+    expect(appRequestJira).not.toHaveBeenCalled();
+  });
+
+  it('searches people by name, keeping only active human accounts', async () => {
+    requestJira.mockResolvedValue(res(200, [
+      { accountId: 'a1', displayName: 'Ann', accountType: 'atlassian', active: true, avatarUrls: { '48x48': 'https://avatar/a1' } },
+      { accountId: 'bot', displayName: 'Bot', accountType: 'app', active: true },
+      { accountId: 'old', displayName: 'Old', accountType: 'atlassian', active: false },
+      { accountId: 'bad id!', displayName: 'X', accountType: 'atlassian', active: true },
+    ]));
+    expect(await new ForgeUserDirectory().search('ann & co')).toEqual([{ accountId: 'a1', displayName: 'Ann', avatarUrl: 'https://avatar/a1', active: true }]);
+    expect(String(requestJira.mock.calls[0][0])).toBe('/rest/api/3/user/search?query=ann+%26+co&maxResults=10');
+  });
+
+  it('looks people up in one bulk call and leaves out the ones Jira does not return', async () => {
+    requestJira.mockResolvedValue(res(200, { values: [
+      { accountId: 'a1', displayName: 'Ann', accountType: 'atlassian', active: true, avatarUrls: {} },
+      { accountId: 'bot', displayName: 'Bot', accountType: 'app', active: true },
+    ] }));
+    const found = await new ForgeUserDirectory().getUsers(['a1', 'bot', 'gone']);
+    expect([...found.values()]).toEqual([
+      { accountId: 'a1', displayName: 'Ann', avatarUrl: null, active: true },
+      { accountId: 'bot', displayName: 'Bot', avatarUrl: null, active: false },
+    ]);
+    requestJira.mockResolvedValueOnce(res(200, { values: 'junk' }));
+    expect((await new ForgeUserDirectory().getUsers(['a1'])).size).toBe(0);
+    expect(String(requestJira.mock.calls[0][0])).toBe('/rest/api/3/user/bulk?maxResults=100&accountId=a1&accountId=bot&accountId=gone');
+    expect((await new ForgeUserDirectory().getUsers([])).size).toBe(0);
+    requestJira.mockResolvedValue(res(403));
+    await expect(new ForgeUserDirectory().search('ann')).rejects.toBeInstanceOf(JiraError);
   });
 });
