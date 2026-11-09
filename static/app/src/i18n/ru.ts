@@ -1,5 +1,6 @@
 import type { RiskEvent } from '../../../../src/shared/api';
 import { ev, num, numText, str, type Messages } from './en';
+import { loopRu } from './loop-ru';
 
 /** Russian plural form: 1 день, 2 дня, 5 дней (11–14 always take the "many" form). */
 export function plural(n: number, one: string, few: string, many: string): string {
@@ -534,4 +535,7 @@ export const ru: Messages = {
   yourQuestion: 'Вопрос',
   scenario: 'Сценарий',
   sidebarRisk: 'Риск LogiMind',
+
+  // Daily check, automation and supplier follow-up
+  loop: loopRu,
 };

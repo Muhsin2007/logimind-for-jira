@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import { Icon } from '../icons';
 import { ColumnMapping } from './ColumnMapping';
 import { JiraSettings } from './JiraSettings';
+import { LoopSettings } from './LoopSettings';
 
 const MAX_BYTES = 1_000_000;
 
@@ -258,6 +259,7 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
       </ConfirmDialog>
 
       {access.status === 'ready' && <JiraSettings canManage={canManage} dataVersion={dataVersion} onDataChanged={onDataChanged} />}
+      {access.status === 'ready' && <LoopSettings canManage={canManage} dataVersion={dataVersion} />}
 
       <Panel title={t.importHistory} icon="clock">
         {history.status === 'loading' && <Loading variant="inline" />}

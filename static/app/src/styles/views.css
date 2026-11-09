@@ -257,3 +257,10 @@
 /* The issue sidebar sits on Jira's own panel background. */
 html:has(.sidebar), html:has(.sidebar) body { background: transparent; }
 .dist-legend .badge { justify-self: start; }
+
+/* Daily briefing and supplier follow-up (week 3). */
+.brief-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--s4); }
+.brief-col { min-width: 0; }
+.followup { margin-top: var(--s4); }
+.followup-draft { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); padding: var(--s3); border: 1px solid var(--border); border-radius: var(--radius, 6px); }
+.followup-body { resize: vertical; font-family: inherit; min-height: 8rem; }

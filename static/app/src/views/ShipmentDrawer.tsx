@@ -7,6 +7,7 @@ import { CoverValue, ErrorState, Facts, Loading, SeverityBadge, StatusBadge } fr
 import { useI18n } from '../i18n';
 import { Icon, type IconName } from '../icons';
 import { IssueAction, useIssueLinks } from '../issues';
+import { FollowUp } from './FollowUp';
 
 function Section({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
   return (
@@ -215,6 +216,7 @@ export function ShipmentDrawer({ id, onClose, onSimulate }: { id: string; onClos
                     ))}
                   </ul>
                 )}
+                {data.risks.length > 0 && <FollowUp key={id} shipmentId={id} />}
               </Section>
             </>
           )}

@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, KpiCard, Loading, Panel, SeverityBadge, Severit
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
 import { Icon } from '../icons';
+import { DailyBriefing } from './DailyBriefing';
 
 export function Dashboard({ dataVersion, onOpenShipment, onNavigate, onDataChanged }: NavProps) {
   const state = useAsync(() => call('getDashboard'), [dataVersion]);
@@ -144,6 +145,8 @@ export function Dashboard({ dataVersion, onOpenShipment, onNavigate, onDataChang
           )}
         </Panel>
       </div>
+
+      <DailyBriefing dataVersion={dataVersion} onOpenShipment={onOpenShipment} onOpenInventory={() => onNavigate('inventory')} />
 
       <Panel title={t.recentImports} icon="file">
         {recentImports.length === 0 ? (

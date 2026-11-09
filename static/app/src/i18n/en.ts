@@ -1,5 +1,6 @@
 import type { RiskEvent } from '../../../../src/shared/api';
 import type { Formatters } from '../format';
+import { loopEn } from './loop-en';
 
 /** A value from a risk's rule evidence (labels are fixed by the rule engine). */
 export const ev = (risk: RiskEvent, label: string): string | number | null => risk.evidence.find((e) => e.label === label)?.value ?? null;
@@ -527,6 +528,9 @@ export const en = {
   yourQuestion: 'Question',
   scenario: 'Scenario',
   sidebarRisk: 'LogiMind risk',
+
+  // Daily check, automation and supplier follow-up
+  loop: loopEn,
 };
 
 export type Messages = typeof en;
