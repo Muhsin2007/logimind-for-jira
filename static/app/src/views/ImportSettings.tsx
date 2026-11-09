@@ -7,6 +7,7 @@ import { Icon } from '../icons';
 import { ColumnMapping } from './ColumnMapping';
 import { JiraSettings } from './JiraSettings';
 import { LoopSettings } from './LoopSettings';
+import { RolesPanel } from './RolesPanel';
 
 const MAX_BYTES = 1_000_000;
 
@@ -260,6 +261,12 @@ export function ImportSettings({ dataVersion, onDataChanged }: NavProps) {
 
       {access.status === 'ready' && <JiraSettings canManage={canManage} dataVersion={dataVersion} onDataChanged={onDataChanged} />}
       {access.status === 'ready' && <LoopSettings canManage={canManage} dataVersion={dataVersion} />}
+      {access.status === 'ready' && <RolesPanel access={access.data} onAccessChanged={access.reload} />}
+      {access.status === 'error' && (
+        <Panel title={t.roles.title} icon="settings">
+          <ErrorState message={access.message} onRetry={() => void access.reload()} />
+        </Panel>
+      )}
 
       <Panel title={t.importHistory} icon="clock">
         {history.status === 'loading' && <Loading variant="inline" />}

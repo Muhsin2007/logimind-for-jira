@@ -1,6 +1,7 @@
 import type { RiskEvent } from '../../../../src/shared/api';
 import { ev, num, numText, str, type Messages } from './en';
 import { loopRu } from './loop-ru';
+import { rolesRu } from './roles-ru';
 
 /** Russian plural form: 1 день, 2 дня, 5 дней (11–14 always take the "many" form). */
 export function plural(n: number, one: string, few: string, many: string): string {
@@ -268,7 +269,7 @@ export const ru: Messages = {
   importTitle: 'Импорт CSV',
   importIntro:
     'Загрузите CSV с поставками или остатками (UTF-8; разделитель — запятая, точка с запятой или табуляция, как при экспорте из Excel; до 1 МБ). Тип файла определяется по заголовку; если у поставщика другие названия колонок, ИИ предложит сопоставление, а вы его подтвердите. Каждый импорт заменяет текущие данные этого типа; строки с ошибками отклоняются и перечисляются ниже — молча они никогда не используются.',
-  adminOnly: 'Импортировать, загружать и удалять данные могут только администраторы Jira. Всё остальное вам доступно для просмотра.',
+  adminOnly: 'Импортировать, загружать и удалять данные могут только владелец и менеджеры LogiMind (пока владельца нет — администраторы Jira). Всё остальное вам доступно для просмотра.',
   csvFiles: 'Файлы CSV',
   importingAi: 'Импортируем… (нераспознанные колонки сопоставляет ИИ)',
   confirmMappingFirst: 'Сначала подтвердите или отмените сопоставление колонок ниже.',
@@ -538,4 +539,6 @@ export const ru: Messages = {
 
   // Daily check, automation and supplier follow-up
   loop: loopRu,
+  // Владелец, менеджеры и наблюдатели
+  roles: rolesRu,
 };

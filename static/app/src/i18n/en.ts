@@ -1,6 +1,7 @@
 import type { RiskEvent } from '../../../../src/shared/api';
 import type { Formatters } from '../format';
 import { loopEn } from './loop-en';
+import { rolesEn } from './roles-en';
 
 /** A value from a risk's rule evidence (labels are fixed by the rule engine). */
 export const ev = (risk: RiskEvent, label: string): string | number | null => risk.evidence.find((e) => e.label === label)?.value ?? null;
@@ -248,7 +249,7 @@ export const en = {
   importTitle: 'Import CSV',
   importIntro:
     'Upload a shipments or inventory CSV (UTF-8, comma, semicolon or tab separated as exported by Excel, max 1 MB). The file type is detected from its header; if your supplier uses other column names, AI proposes a column mapping for you to confirm. Each import replaces the current dataset of that type; rows that fail validation are rejected and listed below, never silently used.',
-  adminOnly: 'Only Jira administrators can import, load or delete data. You can view everything else.',
+  adminOnly: 'Only the LogiMind owner and managers (Jira administrators, until an owner is set) can import, load or delete data. You can view everything else.',
   csvFiles: 'CSV files',
   importingAi: 'Importing… (unrecognised columns are mapped with AI)',
   confirmMappingFirst: 'Confirm or cancel the column mapping below first.',
@@ -531,6 +532,8 @@ export const en = {
 
   // Daily check, automation and supplier follow-up
   loop: loopEn,
+  // Owner, managers and viewers
+  roles: rolesEn,
 };
 
 export type Messages = typeof en;

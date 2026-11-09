@@ -6,7 +6,7 @@ export const loopEn = {
   briefingTitle: 'Daily briefing',
   briefingDesc: 'What changed since the previous daily check. Deterministic: computed from the imported data and the risk rules, no AI.',
   lastCheck: (when: string, manual: boolean) => `Last check ${when} · ${manual ? 'run manually' : 'scheduled'}`,
-  noCheckYet: 'No daily check has run yet. Jira runs the scheduled check once a day at a time it chooses; an administrator can run it now.',
+  noCheckYet: 'No daily check has run yet. Jira runs the scheduled check once a day at a time it chooses; the owner or a manager can run it now.',
   baseline: 'First check: the open risks were recorded. From the next check on, new and resolved risks are listed here.',
   noData: 'No data was imported at the last check, so nothing was compared. Import shipments or inventory; the next check records the open risks.',
   newRisks: 'New',
@@ -34,7 +34,7 @@ export const loopEn = {
   savedOn: 'Auto-create turned on.',
   savedOff: 'Auto-create turned off.',
   lastChanged: (when: string) => `Changed ${when}`,
-  adminOnly: 'Only Jira administrators can change automation.',
+  adminOnly: 'Only the LogiMind owner and managers can change automation.',
   lastRunErrors: 'Problems in the last check',
   askAdmin: 'Ask a Jira administrator to fix this.',
 
