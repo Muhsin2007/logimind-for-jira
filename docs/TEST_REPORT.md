@@ -66,6 +66,28 @@ Known limitations (accepted for week 3):
 - Issue keys of auto-created issues are shown in the briefing to everyone who can open LogiMind.
 - Follow-up drafts: number words ("nine days") are not checked by the validator; only digits are.
 
+## Roles: owner / managers / viewers (2026-11-09, dev v7.0.0)
+
+Automated: 313/313 tests in 26 files, `tsc --noEmit` (backend + UI) clean, `build:ui` exit 0, `forge lint` clean apart from the expected major-version approval (new scope `read:jira-user`). Deployed to development with `--approve MAJOR_VERSION_RULE` (7.0.0) and the dev site upgraded with `forge install --upgrade` (scope accepted). **Production not deployed.**
+
+| Area | Status | Evidence |
+|---|---|---|
+| Role rules (claim, takeover, add/remove, transfer, limits, log of 50) | ✅ unit | `roles.test.ts` |
+| Service checks (admin fallback while no owner, owner-only changes, active human accounts only, expected-owner check) | ✅ unit | `role-service.test.ts` |
+| Every data-changing resolver checks the role first; every resolver is classified | ✅ unit | `resolvers.test.ts` (11 data writes, 5 role resolvers, 15 open) |
+| KVS lock (BUSY, release on failure) | ✅ unit | `kvs-role-store.test.ts` |
+| Jira user lookup/search (bots and inactive users filtered, junk responses) | ✅ unit | `forge-adapters.test.ts` |
+| No owner yet: Jira admin sees "Become owner", data rights unchanged | ✅ live | Roles panel: "No owner yet…", button shown |
+| Become owner | ✅ live | "You are now the owner of LogiMind.", role shows Owner, name from Jira |
+| Manager search (owner) | ✅ live | Query "mu" → "1 person found.", own account marked "Owner" |
+| Role log | ✅ live | "Last 1 change": became owner |
+| Add / remove manager, transfer, takeover | ✅ unit, ⛔ live | Needs a second Jira account |
+| Manager and viewer views (disabled controls, server refusal) | ✅ unit, ⛔ live | Needs a second Jira account |
+| Avatars | 🟡 live | A round "M" badge is shown; from outside the app iframe it was not possible to tell Jira's avatar image from the initials fallback |
+| EN/RU strings | ✅ unit | `i18n.test.ts`; RU not checked live |
+
+Note: while no owner exists, a Jira admin's role label reads "Viewer" although they can manage data (the panel text explains this).
+
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
 

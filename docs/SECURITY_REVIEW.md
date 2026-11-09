@@ -12,7 +12,7 @@ Last updated: 2026-11-03 (Roadmap week 1, Forge LLM). Reviewer: `ecc:security-re
 
 | # | Severity | Finding | Status |
 |---|---|---|---|
-| 1 | High | Import / demo load / delete open to every user | **Fixed** — server-side Jira `ADMINISTER` check (`src/auth/access.ts`) before every write; UI disables the controls for non-admins |
+| 1 | High | Import / demo load / delete open to every user | **Fixed** — server-side check before every write; since the roles change (#32–#38) this is `RoleService.requireDataManager` (owner / manager, or Jira `ADMINISTER` while no owner is set); UI disables the controls for viewers |
 | 2 | High | Prompt-injection surface: CSV free text (supplier, product, carrier…) reaches the Rovo agent and the Forge LLM | **Mitigated** — structured DTOs, free text cleaned and isolated under `importedText`, read-only tools only, issue text from templates; AI answers are verified against structured fields only (week 1, #24–#26) |
 | 3 | Medium | Unbounded full scans / O(n²) per read; concurrent imports racing | **Fixed** — inbound index (linear), risk map, 2,000-row cap, atomic write lock with TTL, bounded-parallel batches |
 | 4 | Medium | Failed import leaves mixed dataset | **Fixed** — added keys rolled back on write failure; stale keys removed only after a full write |
@@ -20,7 +20,7 @@ Last updated: 2026-11-03 (Roadmap week 1, Forge LLM). Reviewer: `ecc:security-re
 | 6 | Info | KVS key injection | Not exploitable — IDs validated, key parts base64url-encoded |
 | 7 | Info | XSS | No sink — values rendered as React text; no `dangerouslySetInnerHTML`, no data-built links |
 | 8 | Info | CSV formula injection | No export exists; escape `= + - @` if an export is added |
-| 9 | Info | Scopes | Least privilege: `storage:app`, `read:jira-work` (permission check, projects, status), `write:jira-work` (issue creation, Phase 3) |
+| 9 | Info | Scopes | Least privilege: `storage:app`, `read:jira-work` (permission check, projects, status), `write:jira-work` (issue creation, Phase 3); `read:jira-user` (roles: user search and names/avatars, asUser only) |
 | 10 | Info | `prosemirror-view` XSS advisory via `@forge/bridge` transitive deps | Not in the built bundle (tree-shaken); re-check when `@forge/bridge` updates |
 | 11 | Info | Secrets | None in source; app ID is not a secret |
 
@@ -58,6 +58,20 @@ Last updated: 2026-11-03 (Roadmap week 1, Forge LLM). Reviewer: `ecc:security-re
 | 29 | Low | Logs contained model / CSV text and raw API errors | **Fixed** — trimmed and cleaned; API message kept (≤ 200 chars) because it is the only diagnostic for request bugs; logs are developer-only |
 | 30 | Low | Truncated tool results counted as evidence | **Fixed** — oversized results are withheld and not counted |
 | 31 | Info | Data residency | Forge LLMs are Atlassian-hosted; no external AI provider or egress; Runs on Atlassian eligibility kept (verified by `forge deploy`) |
+
+## Roles additions (owner / managers / viewers)
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 32 | High | Role bypass: a viewer calls a mutating resolver directly | **Mitigated** — every data and role resolver checks the caller's role server-side from `context.accountId`; the payload never names the actor. Tests: `role-service.test.ts` |
+| 33 | High | Race: two admins claim ownership, or the owner removes a manager while ownership is handed over | **Mitigated** — every role change runs under the `lock:roles` KVS lock and re-reads state and re-checks the actor inside it; a held lock returns BUSY. Tests: `kvs-role-store.test.ts`, `roles.test.ts` |
+| 34 | Medium | Lock-out when the owner leaves the company | **Mitigated** — any Jira site admin (checked asUser via `mypermissions`) can take over; the takeover is logged |
+| 35 | Medium | Adding an arbitrary or forged account ID | **Mitigated** — IDs must match `^[A-Za-z0-9:_-]{1,128}$` and be returned by Jira `user/bulk` asUser as an active user before they are stored |
+| 36 | Medium | User enumeration / profile data leaks | **Mitigated** — search is owner-only, 2–50 characters, max 10 results, asUser (Jira's visibility rules apply); only account IDs are stored; avatars only from `https://` URLs |
+| 37 | Low | Unbounded growth | **Mitigated** — max 20 managers, role log capped at 50 entries |
+| 38 | Info | Avatars are external images | No `external.images` permission was added; if the Custom UI CSP blocks them, initials are shown instead |
+| 39 | Info | Jira admin rights while no owner exists | Accepted — keeps the old behaviour (D7) until someone claims ownership |
+| 40 | Info | "Create Jira issue" for a risk is open to viewers | Accepted (open question for the author) — it runs asUser, so Jira's own project permissions decide; it is not a LogiMind role right (D21) |
 
 ## Known limitations (accepted for now)
 - "Today" is evaluated in UTC, so users far from UTC may see a risk change day a few hours early or late.
