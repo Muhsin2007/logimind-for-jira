@@ -25,8 +25,8 @@ export type LlmToolChoice = 'auto' | 'required' | { type: 'function'; function: 
 
 export interface LlmRequest {
   /** Which feature calls; also selects the usage limits that apply. */
-  purpose: 'copilot' | 'column-mapping';
-  /** The asking user, for per-user limits (copilot). */
+  purpose: 'copilot' | 'column-mapping' | 'follow-up';
+  /** The asking user, for per-user limits (copilot, follow-up). */
   accountId?: string | null;
   messages: LlmMessage[];
   tools?: LlmTool[];

@@ -91,7 +91,9 @@ export class ForgeLlm implements LlmPort {
   private async reserve(request: LlmRequest): Promise<number> {
     const date = day(this.now());
     const appKey = `llm-calls:${date}`;
-    const userKey = request.purpose === 'copilot' ? `llm-calls:${date}:${encode(request.accountId ?? 'anonymous')}` : null;
+    // Person-initiated calls (copilot questions, follow-up drafts) share the per-user and copilot caps.
+    const personal = request.purpose !== 'column-mapping';
+    const userKey = personal ? `llm-calls:${date}:${encode(request.accountId ?? 'anonymous')}` : null;
     let app: number;
     let user: number;
     try {
@@ -102,7 +104,7 @@ export class ForgeLlm implements LlmPort {
       console.error('LogiMind LLM budget unreadable; refusing the call', { purpose: request.purpose, error: err instanceof Error ? err.name : typeof err });
       throw new LlmUnavailableError('the AI usage limit could not be checked');
     }
-    const appLimit = request.purpose === 'copilot' ? COPILOT_SHARE : DAILY_CALL_LIMIT;
+    const appLimit = personal ? COPILOT_SHARE : DAILY_CALL_LIMIT;
     if (app >= appLimit) throw new LlmUnavailableError('the daily AI usage limit is reached');
     if (userKey && user >= PER_USER_COPILOT_LIMIT) throw new LlmUnavailableError('your daily AI question limit is reached');
     try {
