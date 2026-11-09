@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DailyCheckService, MAX_AUTO_ISSUES, MAX_RESOLVED_COMMENTS } from '../../src/services/daily-check-service';
+import { DailyCheckService, MANUAL_LIMITS, MAX_AUTO_ISSUES, MAX_RESOLVED_COMMENTS } from '../../src/services/daily-check-service';
 import { JiraError } from '../../src/jira/jira-gateway';
 import { CheckBusyError, type CheckStore } from '../../src/storage/check-store';
 import type { RiskSnapshot } from '../../src/domain/risk-diff';
 import type { IssueLink, JiraConfig, RiskEvent, Severity } from '../../src/domain/types';
-import type { CreateIssueOutcome } from '../../src/shared/api';
+import type { CheckRun, CreateIssueOutcome } from '../../src/shared/api';
 
 const NOW = new Date('2026-11-09T06:00:00Z');
 const CONFIG: JiraConfig = { projectKey: 'SCRUM', projectName: 'Team', issueTypeId: '1', issueTypeName: 'Task', updatedAt: '', updatedBy: null };
@@ -18,11 +18,12 @@ const link = (riskId: string, issueId: string, over: Partial<IssueLink> = {}): I
   issueId, issueKey: `SCRUM-${issueId}`, projectKey: 'SCRUM', createdAt: '2026-11-01T00:00:00Z', createdBy: 'u1', ...over,
 });
 
-function setup(opts: { risks?: RiskEvent[]; snapshot?: RiskSnapshot | null; autoCreate?: boolean; links?: IssueLink[]; config?: JiraConfig | null } = {}) {
+function setup(opts: { risks?: RiskEvent[]; snapshot?: RiskSnapshot | null; autoCreate?: boolean; links?: IssueLink[]; config?: JiraConfig | null; lastRun?: CheckRun | null; hasData?: boolean } = {}) {
   const store = {
     getSnapshot: vi.fn().mockResolvedValue(opts.snapshot === undefined ? { checkedAt: 'x', today: '2026-11-08', entries: [] } : opts.snapshot),
     saveSnapshot: vi.fn().mockResolvedValue(undefined),
-    getLastRun: vi.fn().mockResolvedValue(null),
+    clear: vi.fn().mockResolvedValue(undefined),
+    getLastRun: vi.fn().mockResolvedValue(opts.lastRun ?? null),
     saveLastRun: vi.fn().mockResolvedValue(undefined),
     getSettings: vi.fn().mockResolvedValue({ autoCreate: opts.autoCreate ?? false, updatedAt: null, updatedBy: null }),
     saveSettings: vi.fn().mockResolvedValue(undefined),
@@ -41,7 +42,7 @@ function setup(opts: { risks?: RiskEvent[]; snapshot?: RiskSnapshot | null; auto
     }),
   };
   const comments = { addComment: vi.fn().mockResolvedValue(undefined) };
-  const risks = { listRisks: vi.fn().mockResolvedValue({ today: '2026-11-09', risks: opts.risks ?? [] }) };
+  const risks = { listRisks: vi.fn().mockResolvedValue({ today: '2026-11-09', risks: opts.risks ?? [], hasData: opts.hasData ?? true }) };
   const service = new DailyCheckService(risks, store, links, creator, comments, () => NOW);
   return { store, links, creator, comments, risks, service };
 }
@@ -129,6 +130,8 @@ describe('DailyCheckService.run', () => {
     expect(issueId).toBe('11');
     expect(JSON.stringify(body)).toContain('resolved in data');
     expect(ctx.links.saveLink).toHaveBeenCalledWith({ ...gone, resolvedNotedAt: NOW.toISOString() });
+    // The marker is written before the comment, so a run killed in between never comments twice.
+    expect(ctx.links.saveLink.mock.invocationCallOrder[0]).toBeLessThan(ctx.comments.addComment.mock.invocationCallOrder[0]);
     expect(run.comments).toEqual({ added: [{ riskId: gone.riskId, issueKey: 'SCRUM-11' }], error: null });
   });
 
@@ -140,8 +143,12 @@ describe('DailyCheckService.run', () => {
       .mockRejectedValueOnce(new JiraError('FORBIDDEN', 'You do not have permission to add a comment.'));
     const run = await ctx.service.run('manual');
     expect(ctx.comments.addComment).toHaveBeenCalledTimes(2);
-    expect(ctx.links.saveLink).toHaveBeenCalledTimes(1);
-    expect(ctx.links.saveLink.mock.calls[0][0].riskId).toBe('LATE_SHIPMENT:SHP-1');
+    // SHP-1: marked and kept (deleted issue). SHP-2: marked, then rolled back after the refusal.
+    expect(ctx.links.saveLink.mock.calls.map((c) => [c[0].riskId, c[0].resolvedNotedAt ?? null])).toEqual([
+      ['LATE_SHIPMENT:SHP-1', NOW.toISOString()],
+      ['LATE_SHIPMENT:SHP-2', NOW.toISOString()],
+      ['LATE_SHIPMENT:SHP-2', null],
+    ]);
     expect(run.comments.added).toEqual([]);
     expect(run.comments.error).toMatch(/cannot add comments/);
   });
@@ -149,8 +156,89 @@ describe('DailyCheckService.run', () => {
   it('caps comments per run', async () => {
     const links = Array.from({ length: MAX_RESOLVED_COMMENTS + 3 }, (_, i) => link(`LATE_SHIPMENT:SHP-${i}`, String(i + 1)));
     const ctx = setup({ links });
-    await ctx.service.run('manual');
+    await ctx.service.run('schedule');
     expect(ctx.comments.addComment).toHaveBeenCalledTimes(MAX_RESOLVED_COMMENTS);
+    const manual = setup({ links });
+    await manual.service.run('manual');
+    expect(manual.comments.addComment).toHaveBeenCalledTimes(MANUAL_LIMITS.comments);
+  });
+});
+
+describe('DailyCheckService.run review cases', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  it('compares with the snapshot from before today, so a second check the same day keeps the changes', async () => {
+    const ctx = setup({ risks: [risk('LATE_SHIPMENT:SHP-1')] });
+    await ctx.service.run('manual');
+    expect(ctx.store.getSnapshot).toHaveBeenCalledWith('2026-11-09');
+  });
+
+  it('retries newly critical risks a previous run could not file, if still critical', async () => {
+    const lastRun = { autoCreate: { enabled: true, created: [], notCreated: 2, error: null, pending: ['LATE_SHIPMENT:SHP-7', 'LATE_SHIPMENT:SHP-8'] } } as unknown as CheckRun;
+    const ctx = setup({
+      autoCreate: true, lastRun,
+      snapshot: { checkedAt: 'x', today: '2026-11-08', entries: [['LATE_SHIPMENT:SHP-7', 'critical'], ['LATE_SHIPMENT:SHP-8', 'critical']] },
+      risks: [risk('LATE_SHIPMENT:SHP-7'), risk('LATE_SHIPMENT:SHP-8', 'high')],
+    });
+    const run = await ctx.service.run('schedule');
+    expect(ctx.creator.createIssueForRisk.mock.calls.map((c) => c[0])).toEqual(['LATE_SHIPMENT:SHP-7']);
+    expect(run.autoCreate.pending).toEqual([]);
+  });
+
+  it('keeps risks left over by an error as pending for the next run', async () => {
+    const fresh = Array.from({ length: 4 }, (_, i) => risk(`LATE_SHIPMENT:SHP-${i + 10}`));
+    const ctx = setup({ autoCreate: true, risks: fresh });
+    ctx.creator.createIssueForRisk
+      .mockResolvedValueOnce({ ok: false, code: 'DUPLICATE', message: 'exists' })
+      .mockResolvedValueOnce({ ok: false, code: 'RATE_LIMITED', message: 'slow down' });
+    const run = await ctx.service.run('schedule');
+    expect(run.autoCreate.pending).toEqual(['LATE_SHIPMENT:SHP-11', 'LATE_SHIPMENT:SHP-12', 'LATE_SHIPMENT:SHP-13']);
+    expect(run.autoCreate.notCreated).toBe(3);
+  });
+
+  it('uses smaller limits for "Run check now", which must finish within a resolver call', async () => {
+    const fresh = Array.from({ length: 7 }, (_, i) => risk(`LATE_SHIPMENT:SHP-${i + 10}`));
+    const ctx = setup({ autoCreate: true, risks: fresh });
+    const run = await ctx.service.run('manual');
+    expect(ctx.creator.createIssueForRisk).toHaveBeenCalledTimes(MANUAL_LIMITS.issues);
+    expect(run.autoCreate.pending).toHaveLength(7 - MANUAL_LIMITS.issues);
+  });
+
+  it('does nothing and keeps no snapshot while no data is imported', async () => {
+    const ctx = setup({ autoCreate: true, hasData: false, links: [link('LATE_SHIPMENT:SHP-1', '11')] });
+    const run = await ctx.service.run('schedule');
+    expect(run).toMatchObject({ noData: true, baseline: true, counts: { open: 0 } });
+    expect(ctx.comments.addComment).not.toHaveBeenCalled();
+    expect(ctx.creator.createIssueForRisk).not.toHaveBeenCalled();
+    expect(ctx.store.saveSnapshot).not.toHaveBeenCalled();
+    expect(ctx.store.saveLastRun).toHaveBeenCalledWith(run);
+  });
+
+  it('does not comment when the marker cannot be saved first, and shows no raw error text', async () => {
+    const ctx = setup({ links: [link('LATE_SHIPMENT:SHP-1', '11')] });
+    ctx.links.saveLink.mockRejectedValueOnce(new Error('kvs internal 123'));
+    const run = await ctx.service.run('schedule');
+    expect(ctx.comments.addComment).not.toHaveBeenCalled();
+    expect(run.comments.error).toBeTruthy();
+    expect(run.comments.error).not.toContain('kvs internal 123');
+  });
+
+  it('clears the "resolved" marker when the risk is open again, so a later resolution is noted again', async () => {
+    const back = link('LATE_SHIPMENT:SHP-1', '11', { resolvedNotedAt: '2026-11-01T00:00:00Z' });
+    const ctx = setup({ links: [back], risks: [risk('LATE_SHIPMENT:SHP-1')] });
+    await ctx.service.run('schedule');
+    const { resolvedNotedAt: _r, ...open } = back;
+    expect(ctx.links.saveLink).toHaveBeenCalledWith(open);
+    expect(ctx.comments.addComment).not.toHaveBeenCalled();
+  });
+
+  it('clears the check state together with the data', async () => {
+    const ctx = setup();
+    await ctx.service.clear();
+    expect(ctx.store.withCheckLock).toHaveBeenCalled();
+    expect(ctx.store.clear).toHaveBeenCalled();
   });
 });
 

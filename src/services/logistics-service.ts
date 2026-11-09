@@ -101,9 +101,9 @@ export class LogisticsService {
     };
   }
 
-  async listRisks(): Promise<{ today: IsoDate; risks: RiskEvent[] }> {
+  async listRisks(): Promise<{ today: IsoDate; risks: RiskEvent[]; hasData: boolean }> {
     const snap = await this.snapshot();
-    return { today: snap.today, risks: snap.risks };
+    return { today: snap.today, risks: snap.risks, hasData: snap.shipments.length + snap.inventory.length > 0 };
   }
 
   listImports(): Promise<ImportBatch[]> {

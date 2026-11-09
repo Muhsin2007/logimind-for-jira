@@ -5,15 +5,26 @@ import { JiraError } from '../jira/jira-gateway';
 import type { CheckRun, CreateIssueOutcome, DailyBriefing, LoopSettings } from '../shared/api';
 import type { CheckStore } from '../storage/check-store';
 
-/** Issues one check may create; further newly critical risks are reported as not created. */
+/** Issues one scheduled check may create; further newly critical risks wait for the next check. */
 export const MAX_AUTO_ISSUES = 5;
-/** "Resolved in data" comments per check; the rest follow on the next check. */
+/** "Resolved in data" comments per scheduled check; the rest follow on the next check. */
 export const MAX_RESOLVED_COMMENTS = 10;
+/** "Run check now" runs inside a resolver call (about 25 s), so it does less per run. */
+export const MANUAL_LIMITS = { issues: 3, comments: 5 } as const;
 /** Items per briefing list; the counts carry the totals. */
 export const BRIEF_LIMIT = 10;
+/** Newly critical risks kept for a retry by the next run when a run could not file them. */
+export const MAX_PENDING = 50;
+/** Marker removals per run for risks that came back (cheap KVS writes; the rest follow). */
+const MAX_MARKER_RESETS = 50;
+const COMMENTS_FAILED = 'Comments could not be added to linked issues. The next check tries again.';
 
+interface Limits {
+  issues: number;
+  comments: number;
+}
 interface RiskSource {
-  listRisks(): Promise<{ today: IsoDate; risks: RiskEvent[] }>;
+  listRisks(): Promise<{ today: IsoDate; risks: RiskEvent[]; hasData: boolean }>;
 }
 interface LinkSource {
   getConfig(): Promise<JiraConfig | null>;
@@ -41,9 +52,9 @@ function autoCreateMessage(code: string, projectKey: string, message: string): s
 }
 
 /**
- * The daily check: compares open risks with the previous check, optionally files Jira issues for
- * newly critical risks (as the app), and comments once on issues whose risk left the data.
- * It never transitions, edits or closes an issue.
+ * The daily check: compares open risks with the latest check of an earlier day, optionally files
+ * Jira issues for newly critical risks (as the app), and comments once on issues whose risk left
+ * the data. It never transitions, edits or closes an issue.
  */
 export class DailyCheckService {
   constructor(
@@ -56,7 +67,13 @@ export class DailyCheckService {
   ) {}
 
   run(trigger: CheckRun['trigger']): Promise<CheckRun> {
-    return this.store.withCheckLock(() => this.runLocked(trigger));
+    const limits: Limits = trigger === 'manual' ? MANUAL_LIMITS : { issues: MAX_AUTO_ISSUES, comments: MAX_RESOLVED_COMMENTS };
+    return this.store.withCheckLock(() => this.runLocked(trigger, limits));
+  }
+
+  /** Forgets snapshots and the last run, with "Clear data". */
+  clear(): Promise<void> {
+    return this.store.withCheckLock(() => this.store.clear());
   }
 
   async getBriefing(): Promise<DailyBriefing> {
@@ -74,16 +91,35 @@ export class DailyCheckService {
     return settings;
   }
 
-  private async runLocked(trigger: CheckRun['trigger']): Promise<CheckRun> {
+  private async runLocked(trigger: CheckRun['trigger'], limits: Limits): Promise<CheckRun> {
     const checkedAt = this.now().toISOString();
-    const [{ today, risks }, previous, settings] = await Promise.all([this.risks.listRisks(), this.store.getSnapshot(), this.store.getSettings()]);
+    const [{ today, risks, hasData }, settings, lastRun] = await Promise.all([this.risks.listRisks(), this.store.getSettings(), this.store.getLastRun()]);
+    const idle: CheckRun['autoCreate'] = { enabled: settings.autoCreate, created: [], notCreated: 0, error: null, pending: [] };
+
+    if (!hasData) {
+      // Nothing imported (or just cleared): no snapshot, so the first check with data is a baseline
+      // instead of reporting every risk as new, and no comment claims a risk was resolved.
+      const empty: CheckRun = {
+        checkedAt, today, trigger, baseline: true, noData: true,
+        counts: { open: 0, newRisks: 0, resolved: 0, stillOpen: 0, stillCritical: 0 },
+        newRisks: [], resolved: [], stillCritical: [], autoCreate: idle, comments: { added: [], error: null },
+      };
+      await this.store.saveLastRun(empty);
+      return empty;
+    }
+
+    // The base is the latest snapshot of an earlier day, so a second check today keeps today's changes.
+    const previous = await this.store.getSnapshot(today);
     const diff = diffRisks(previous?.entries ?? null, risks);
 
-    const autoCreate: CheckRun['autoCreate'] =
-      settings.autoCreate && !diff.baseline
-        ? await this.autoCreate(diff.newCritical, risks)
-        : { enabled: settings.autoCreate, created: [], notCreated: 0, error: null };
-    const comments = await this.commentResolved(new Set(risks.map((r) => r.id)), today);
+    let autoCreate = idle;
+    if (settings.autoCreate && !diff.baseline) {
+      const retry = new Set(lastRun?.autoCreate.pending ?? []);
+      const fresh = new Set(diff.newCritical.map((r) => r.id));
+      const carried = risks.filter((r) => r.severity === 'critical' && retry.has(r.id) && !fresh.has(r.id));
+      autoCreate = await this.autoCreate([...diff.newCritical, ...carried], risks, limits.issues);
+    }
+    const comments = await this.commentResolved(new Set(risks.map((r) => r.id)), today, limits.comments);
 
     const run: CheckRun = {
       checkedAt,
@@ -110,19 +146,25 @@ export class DailyCheckService {
     return run;
   }
 
-  private async autoCreate(candidates: RiskEvent[], active: RiskEvent[]): Promise<CheckRun['autoCreate']> {
-    const result: CheckRun['autoCreate'] = { enabled: true, created: [], notCreated: 0, error: null };
+  private async autoCreate(candidates: RiskEvent[], active: RiskEvent[], maxIssues: number): Promise<CheckRun['autoCreate']> {
+    const result: CheckRun['autoCreate'] = { enabled: true, created: [], notCreated: 0, error: null, pending: [] };
     if (candidates.length === 0) return result;
+    const ordered = briefList(candidates, candidates.length);
     const config = await this.links.getConfig();
     if (!config) {
       result.notCreated = candidates.length;
+      result.pending = ordered.slice(0, MAX_PENDING).map((r) => r.id);
       result.error = { code: 'NOT_CONFIGURED', message: 'Choose a Jira project and issue type in Jira settings before issues can be created automatically.' };
       return result;
     }
+    const pending: string[] = [];
     let handled = 0;
     let attempts = 0;
-    for (const ref of briefList(candidates, candidates.length)) {
-      if (attempts >= MAX_AUTO_ISSUES || result.error) break;
+    for (const ref of ordered) {
+      if (attempts >= maxIssues || result.error) {
+        pending.push(ref.id);
+        continue;
+      }
       attempts++;
       const outcome = await this.creator.createIssueForRisk(ref.id, null, active);
       if (outcome.ok) {
@@ -130,32 +172,47 @@ export class DailyCheckService {
       } else if (HANDLED.has(outcome.code)) {
         handled++;
       } else {
+        pending.push(ref.id);
         result.error = { code: outcome.code, message: autoCreateMessage(outcome.code, config.projectKey, outcome.message) };
         console.warn('LogiMind daily check: auto-create stopped', { code: outcome.code });
       }
     }
     result.notCreated = candidates.length - result.created.length - handled;
+    result.pending = pending.slice(0, MAX_PENDING);
     return result;
   }
 
-  private async commentResolved(open: Set<string>, today: IsoDate): Promise<CheckRun['comments']> {
+  private async commentResolved(open: Set<string>, today: IsoDate, maxComments: number): Promise<CheckRun['comments']> {
     const out: CheckRun['comments'] = { added: [], error: null };
-    const pending = (await this.links.listLinks()).filter((l) => !open.has(l.riskId) && !l.resolvedNotedAt);
-    for (const link of pending.slice(0, MAX_RESOLVED_COMMENTS)) {
+    const links = await this.links.listLinks();
+
+    // A risk that is back in the data loses its marker, so its next resolution is noted again.
+    for (const link of links.filter((l) => open.has(l.riskId) && l.resolvedNotedAt).slice(0, MAX_MARKER_RESETS)) {
+      const { resolvedNotedAt: _noted, ...reopened } = link;
+      await this.links.saveLink(reopened).catch(() => console.warn('LogiMind daily check: marker reset failed'));
+    }
+
+    const pending = links.filter((l) => !open.has(l.riskId) && !l.resolvedNotedAt);
+    for (const link of pending.slice(0, maxComments)) {
+      // The marker is written first: a run cut off after the comment never comments twice.
+      try {
+        await this.links.saveLink({ ...link, resolvedNotedAt: this.now().toISOString() });
+      } catch {
+        out.error = COMMENTS_FAILED;
+        console.warn('LogiMind daily check: commenting stopped', { code: 'STORAGE' });
+        break;
+      }
       try {
         await this.comments.addComment(link.issueId, buildResolvedComment(link, today));
-        await this.links.saveLink({ ...link, resolvedNotedAt: this.now().toISOString() });
         out.added.push({ riskId: link.riskId, issueKey: link.issueKey });
       } catch (err) {
-        if (err instanceof JiraError && err.code === 'NOT_FOUND') {
-          // The issue was deleted or is out of the app's reach: mark it so it is not retried daily.
-          await this.links.saveLink({ ...link, resolvedNotedAt: this.now().toISOString() });
-          continue;
-        }
+        // A deleted issue (or one out of the app's reach) stays marked, so it is not retried daily.
+        if (err instanceof JiraError && err.code === 'NOT_FOUND') continue;
+        await this.links.saveLink(link).catch(() => undefined);
         const forbidden = err instanceof JiraError && (err.code === 'FORBIDDEN' || err.code === 'AUTH');
         out.error = forbidden
           ? 'The LogiMind app cannot add comments to linked issues. Give the app the Add comments permission in the project.'
-          : `Comments could not be added: ${err instanceof Error ? err.message : 'unknown error'}`;
+          : COMMENTS_FAILED;
         console.warn('LogiMind daily check: commenting stopped', { code: err instanceof JiraError ? err.code : 'UNKNOWN' });
         break;
       }

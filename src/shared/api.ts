@@ -172,8 +172,12 @@ export interface CheckRun {
     /** Newly critical risks left without an issue (cap reached, error, or no project set). */
     notCreated: number;
     error: { code: string; message: string } | null;
+    /** Risk IDs the next run retries (left over by the cap or an error); capped. */
+    pending?: string[];
   };
   comments: { added: { riskId: string; issueKey: string }[]; error: string | null };
+  /** No data was imported: nothing was compared, filed or commented. */
+  noData?: boolean;
 }
 
 export interface LoopSettings {

@@ -109,6 +109,11 @@ resolver.define('clearData', async () => {
   await requireDataManager();
   const result = await logistics.clearData();
   await issues.clearLinks();
+  // The daily check forgets its snapshots too, so the next check is a baseline, not "everything resolved".
+  await dailyCheck.clear().catch((err: unknown) => {
+    if (!(err instanceof CheckBusyError)) throw err;
+    console.warn('LogiMind clear data: daily check running, its state is kept');
+  });
   return result;
 });
 resolver.define('listJiraProjects', async () => {
