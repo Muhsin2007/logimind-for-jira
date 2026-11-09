@@ -72,6 +72,14 @@ describe('ForgeLlm', () => {
     await expect(new ForgeLlm(() => NOW).chat(COPILOT)).rejects.toThrow('your daily AI question limit is reached');
   });
 
+  it('counts follow-up drafts against the same per-person and copilot caps', async () => {
+    const FOLLOW_UP: LlmRequest = { ...COPILOT, purpose: 'follow-up' };
+    counters({ 'llm-calls:2026-11-03': 3, [USER_KEY]: PER_USER_COPILOT_LIMIT });
+    await expect(new ForgeLlm(() => NOW).chat(FOLLOW_UP)).rejects.toThrow(LlmUnavailableError);
+    counters({ 'llm-calls:2026-11-03': COPILOT_SHARE });
+    await expect(new ForgeLlm(() => NOW).chat(FOLLOW_UP)).rejects.toThrow(LlmUnavailableError);
+  });
+
   it('fails closed when the usage counters cannot be read or written', async () => {
     kvs.get.mockRejectedValue(new Error('kvs down'));
     await expect(new ForgeLlm(() => NOW).chat(MAPPING)).rejects.toThrow('the AI usage limit could not be checked');
