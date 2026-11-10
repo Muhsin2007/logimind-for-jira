@@ -88,6 +88,29 @@ Automated: 313/313 tests in 26 files, `tsc --noEmit` (backend + UI) clean, `buil
 
 Note: while no owner exists, a Jira admin's role label reads "Viewer" although they can manage data (the panel text explains this).
 
+## Roadmap week 4: Atlassian MCP (`rovo:mcp`) (2026-11-10, dev v7.1.0)
+
+| Check | Status | Evidence |
+|---|---|---|
+| Full suite | ✅ | `npx vitest run`: **319 passed** (27 files); UI build OK; `tsc --noEmit` clean; `forge lint` no issues |
+| One `rovo:mcp` module, key/name rules, exactly the five read-only tools, each a `GET` action backed by an `index.agent*` handler; `rovo:agent` unchanged; scopes unchanged | ✅ unit | `tests/manifest/rovo-mcp.test.ts` (red before the module was added, green after) |
+| Tool behaviour (validation, `importedText` isolation, `visibleToYou`, `safely`) | ✅ unit | Same handlers as the Rovo agent: `tests/agent/actions.test.ts` |
+| Deploy to development | ✅ live | `forge deploy -e development` → v7.1.0 (minor, no re-consent) |
+| MCP endpoint exists for the app | ✅ live | Unauthenticated `initialize` to `https://mcp.atlassian.com/forge/<appId>` → `401 invalid_token` with `WWW-Authenticate: Bearer resource_metadata=…`; the metadata names an Atlassian authorization server |
+| Admin turns the tools on (Connected apps → LogiMind → Tools) on a site without Rovo | ⛔ pending | Needs the author signed in to Atlassian Administration |
+| OAuth consent and a real tool call from an MCP client (Claude Code) | ⛔ pending | Needs the author to approve the OAuth consent in the browser |
+| Rovo Studio custom agent using the tools | ⛔ not possible | Rovo is not provisioned on the author's site (D11) |
+
+Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High.
+- **Fixed:** raw Jira/storage error text no longer reaches the caller of `get-linked-jira-issue` (it could name a hidden issue). It is logged and replaced by a fixed message; pinned by `actions.test.ts`.
+- **Fixed:** the manifest test now fails with a clear message if the module is missing, and checks that each handler is really exported from `src/index.ts`.
+- **Open (follow-ups, not regressions):**
+  - handlers do not check or log the calling account; an MCP caller only needs a site account the admin allowed, and the data is app-wide;
+  - one hidden or deleted issue may fail a whole 50-ID JQL status chunk (to be checked live);
+  - no app-level rate limit (Forge invocation limits apply);
+  - the UI `listIssueLinks` resolver still returns stored keys of issues the user cannot see;
+  - with an external MCP client, tool results leave Atlassian for that client's AI vendor (admin opt-in).
+
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
 

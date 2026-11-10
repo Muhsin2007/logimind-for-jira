@@ -27,7 +27,8 @@ Judging criteria are equally weighted: Technological implementation, Design, Pot
 | 1 | ✅ Done — dev v6.6.0, production v3.0.0 |
 | 2 | ✅ Done — dev v6.8.0, production v3.1.0: days of cover + projected stock-out, what-if delay simulator (UI, Copilot tool, Rovo action); plus EN/RU language switch (author request) |
 | 3 | ✅ Done (2026-11-09) — dev v6.13.0, production v3.2.0 (deployed by the author): daily check (`scheduledTrigger` + admin "Run check now"), daily briefing, auto-create of issues (off by default, max 5/run), one "resolved in data" comment per linked issue, AI supplier follow-up draft (copy only, validated, template fallback), EN/RU |
-| 4–7 | Not started |
+| 4 | 🟡 In progress (2026-11-10) — dev v7.1.0: `rovo:mcp` module `logimind-mcp` exposes the same five read-only actions as MCP tools (no code duplication, no new scopes). The endpoint `https://mcp.atlassian.com/forge/<appId>` is live and asks for OAuth. A live tool call from an external MCP client still needs the author: a site admin must turn the tools on (Administration → Apps → Sites → Connected apps → LogiMind → Tools) and approve the OAuth consent. Whether this works without Rovo on the site is not yet confirmed |
+| 5–7 | Not started |
 
 ## Presentation story
 Persona: a purchasing lead at an auto-parts importer in Tashkent who spends an hour every morning in spreadsheets. Show before/after with concrete numbers from the demo data.

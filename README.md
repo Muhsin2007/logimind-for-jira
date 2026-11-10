@@ -20,6 +20,7 @@ Built for **Codegeist 2026** — category *Apps for Specialized Industries*, bon
 | **Jira integration** | "Create Jira issue" from any risk, created **as the user** in an admin-chosen project. One issue per risk (duplicate-safe), live status, and a **LogiMind panel on the Jira issue** showing the source shipment. |
 | **AI Copilot** | Free-form questions ("which delays hurt stock the most?") answered by Claude (Forge LLM) that may only call LogiMind's read-only tools. Every ID, number and date in the answer is checked against the data; an unverifiable answer, a model error or an unavailable model falls back to the deterministic rule-based copilot, and the answer says so. Facts with cited IDs, next steps, and an explicit list of unknowns. |
 | **Rovo agent** | `LogiMind` agent with five read-only actions (risk summary, shipment, inventory, linked Jira issue, delay simulation). Imported text is isolated and treated as untrusted data. |
+| **Atlassian MCP** | The same five read-only tools as an MCP server (`rovo:mcp`, Preview) for Rovo Studio agents and MCP clients such as Claude, at `https://mcp.atlassian.com/forge/0c416234-e118-4454-907e-04c39eaa2c70`. A site admin turns the tools on in Administration → Apps → Sites → Connected apps → LogiMind → Tools; users sign in with Atlassian OAuth and calls run with their own Jira permissions. |
 
 Data never leaves Atlassian: the app runs on Forge with Forge Storage and is eligible for **Runs on Atlassian**.
 

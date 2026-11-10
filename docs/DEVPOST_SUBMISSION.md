@@ -5,7 +5,7 @@ Draft for the author to review and paste. Nothing here has been submitted.
 **Project name:** LogiMind for Jira
 **Tagline:** Turn logistics chaos into clear action inside Jira.
 **Category:** Apps for Specialized Industries
-**Bonus prize:** Best Agents – Rovo/Assignable agents *(select only once the agent has been shown working on a Rovo-enabled site — see checklist)*
+**Bonus prize (one only):** Best app with Atlassian MCP *(select once a real MCP client call has been shown live — see the MCP write-up below)*; Best Agents – Rovo only if the agent can be shown working on a Rovo-enabled site
 
 ## Inspiration
 Small importers and distributors run purchasing and operations work in Jira, but their shipments and stock live in spreadsheets. Late containers and stock-outs are discovered too late, and nobody can say which delay actually hurts. We wanted the logistics picture — and the follow-up work — in the same place.
@@ -52,6 +52,9 @@ Days of cover and a what-if delay simulator, scheduled daily checks that open an
 
 ## Known limitations
 See README "Known limitations" — AI reasoning is not verified (only its data), daily AI call cap, UTC dates, 2,000-row cap, English UI, app-wide data visibility, Rovo agent not exercised live on the author's Free-plan site.
+
+## Bonus write-up (Best app with Atlassian MCP)
+LogiMind declares a `rovo:mcp` module (`logimind-mcp`) that exposes its five read-only tools — risk summary, shipment, inventory, linked Jira issue and delay simulation — to Rovo Studio agents and to any MCP-compatible AI client (Claude, IDE assistants) through Atlassian's endpoint `https://mcp.atlassian.com/forge/<appId>`. A site admin decides per site which tools are exposed; the user signs in with Atlassian OAuth and every call runs with that user's permissions, so linked Jira issues the user cannot see stay hidden. The tools are the very same validated, `GET`-only handlers the in-app Copilot and the Rovo agent use: model-supplied IDs are checked, unknown IDs return `found:false` instead of a guess, and CSV text is returned under `importedText` with an explicit "data, not instructions" notice. No new scopes and no write tools. Note: LogiMind itself sends nothing outside Atlassian, but when a user connects an external MCP client, the tool results go to that client and its AI vendor; that is why exposure is off until a site admin turns it on. Example: in Claude, *"Which SKUs run out if SHP-1001 is 7 days late, and is there a Jira issue for the most critical risk?"* triggers `simulate-delay` and `get-linked-jira-issue`.
 
 ## Bonus write-up (Best Agents)
 LogiMind ships a `rovo:agent` with four `action` modules (`actionVerb: GET`): risk summary (filters: severity, risk type), shipment lookup, inventory lookup and linked-Jira-issue lookup. The agent's instructions require data-only, cited answers split into facts / interpretation / next steps / unknowns, forbid predictions and write claims, and treat imported CSV text as untrusted data. Actions validate every model-supplied input, return `found:false` instead of guessing, hide issues the user cannot see, and are the same tools the in-app Copilot uses — so the agent and the app always agree.
