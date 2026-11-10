@@ -88,14 +88,14 @@ Automated: 313/313 tests in 26 files, `tsc --noEmit` (backend + UI) clean, `buil
 
 Note: while no owner exists, a Jira admin's role label reads "Viewer" although they can manage data (the panel text explains this).
 
-## Roadmap week 4: Atlassian MCP (`rovo:mcp`) (2026-11-10, dev v7.1.0)
+## Roadmap week 4: Atlassian MCP (`rovo:mcp`) (2026-11-10, dev v7.2.0)
 
 | Check | Status | Evidence |
 |---|---|---|
 | Full suite | ✅ | `npx vitest run`: **319 passed** (27 files); UI build OK; `tsc --noEmit` clean; `forge lint` no issues |
 | One `rovo:mcp` module, key/name rules, exactly the five read-only tools, each a `GET` action backed by an `index.agent*` handler; `rovo:agent` unchanged; scopes unchanged | ✅ unit | `tests/manifest/rovo-mcp.test.ts` (red before the module was added, green after) |
 | Tool behaviour (validation, `importedText` isolation, `visibleToYou`, `safely`) | ✅ unit | Same handlers as the Rovo agent: `tests/agent/actions.test.ts` |
-| Deploy to development | ✅ live | `forge deploy -e development` → v7.1.0 (minor, no re-consent) |
+| Deploy to development | ✅ live | `forge deploy -e development` → v7.1.0, then v7.2.0 with the review fix (minor, no re-consent) |
 | MCP endpoint exists for the app | ✅ live | Unauthenticated `initialize` to `https://mcp.atlassian.com/forge/<appId>` → `401 invalid_token` with `WWW-Authenticate: Bearer resource_metadata=…`; the metadata names an Atlassian authorization server |
 | Admin turns the tools on (Connected apps → LogiMind → Tools) on a site without Rovo | ⛔ pending | Needs the author signed in to Atlassian Administration |
 | OAuth consent and a real tool call from an MCP client (Claude Code) | ⛔ pending | Needs the author to approve the OAuth consent in the browser |
