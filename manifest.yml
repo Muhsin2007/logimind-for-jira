@@ -28,6 +28,17 @@ modules:
         - get-inventory
         - get-linked-jira-issue
         - simulate-delay
+  # Atlassian MCP: the same five read-only actions as tools for Rovo Studio agents and, once a site
+  # admin enables them, external MCP clients at https://mcp.atlassian.com/forge/<appId>.
+  rovo:mcp:
+    - key: logimind-mcp
+      name: LogiMind logistics risk
+      tools:
+        - get-risk-summary
+        - get-shipment
+        - get-inventory
+        - get-linked-jira-issue
+        - simulate-delay
   action:
     - key: get-risk-summary
       name: Get logistics risk summary
