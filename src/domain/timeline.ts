@@ -15,7 +15,7 @@ export interface TimelineItem {
   eta: IsoDate | null;
   /** Expected minus planned arrival, in days (positive = slipped later). */
   slipDays: number;
-  /** Days past the planned arrival (0 when not late). */
+  /** Days past the earlier of planned and expected arrival (0 when not late). */
   daysLate: number;
   /** Expected before today: the shipment should already be here. */
   overdue: boolean;
@@ -66,7 +66,8 @@ export function inboundTimeline(shipments: Shipment[], today: IsoDate, options: 
         expected,
         eta: s.eta,
         slipDays: daysBetween(s.plannedArrival, expected),
-        daysLate: Math.max(0, daysBetween(s.plannedArrival, today)),
+        // Late since the earliest date it was promised (an early ETA that passed counts too).
+        daysLate: Math.max(0, daysBetween(minDate(s.plannedArrival, expected), today)),
         overdue: expected < today,
       };
     })

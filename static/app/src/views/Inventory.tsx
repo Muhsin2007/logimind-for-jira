@@ -7,7 +7,8 @@ import { StockOutlookPanel } from './Outlook';
 
 type StockFilter = 'all' | 'below';
 
-const keyOf = (i: InventoryRow) => `${i.sku}@${i.warehouse}`;
+// JSON keeps the pair unambiguous even when a SKU or warehouse contains "@".
+const keyOf = (i: InventoryRow) => JSON.stringify([i.sku, i.warehouse]);
 const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3 } as const;
 
 /** The position to chart first: the most severe risk, then the earliest stock-out. */
@@ -20,10 +21,9 @@ function firstToChart(items: InventoryRow[]): InventoryRow | undefined {
 }
 
 export function Inventory({ dataVersion }: NavProps) {
-  const state = useAsync(
-    () => Promise.all([call('listInventory'), call('listShipments')]).then(([i, s]) => ({ today: i.today, items: i.items, shipments: s.shipments })),
-    [dataVersion],
-  );
+  const state = useAsync(() => call('listInventory'), [dataVersion]);
+  // Only the chart needs shipments: the table never waits for them or fails because of them.
+  const pipeline = useAsync(() => call('listShipments'), [dataVersion]);
   const [chartKey, setChartKey] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StockFilter>('all');
@@ -72,7 +72,7 @@ export function Inventory({ dataVersion }: NavProps) {
         </div>
       </div>
 
-      {charted && <StockOutlookPanel item={charted} shipments={state.data.shipments} today={state.data.today} />}
+      {charted && pipeline.status === 'ready' && <StockOutlookPanel item={charted} shipments={pipeline.data.shipments} today={state.data.today} />}
 
       <div className="toolbar" role="search">
         <SearchField value={query} onChange={setQuery} placeholder={t.searchInventory} label={t.searchInventoryLabel} />

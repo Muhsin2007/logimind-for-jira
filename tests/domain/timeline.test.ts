@@ -37,6 +37,12 @@ describe('inboundTimeline', () => {
     expect(small).toMatchObject({ start: TODAY, end: '2026-11-09' });
   });
 
+  it('counts lateness from the earliest promised date, so an early ETA that passed is late too', () => {
+    const tl = inboundTimeline([ship('E', '2026-11-15', '2026-10-30'), ship('F', '2026-10-25', '2026-10-31')], TODAY);
+    expect(tl.items.find((i) => i.id === 'E')).toMatchObject({ overdue: true, daysLate: 3, slipDays: -16 });
+    expect(tl.items.find((i) => i.id === 'F')).toMatchObject({ overdue: true, daysLate: 8, slipDays: 6 });
+  });
+
   it('has weekly ticks aligned to today', () => {
     const tl = inboundTimeline([ship('A', '2026-10-20', '2026-11-25')], TODAY);
     expect(tl.ticks).toEqual(['2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23']);

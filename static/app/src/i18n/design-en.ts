@@ -16,7 +16,7 @@ export const designEn = {
   legendOverdue: 'Overdue',
   timelineRow: (id: string, sku: string, warehouse: string, planned: string, expected: string, state: string) =>
     `${id}: ${sku} to ${warehouse}. Planned ${planned}, expected ${expected}. ${state}.`,
-  stateOverdue: (days: number) => `Overdue, ${days} ${days === 1 ? 'day' : 'days'} past plan`,
+  stateOverdue: (days: number) => `Overdue, ${days} ${days === 1 ? 'day' : 'days'} late`,
   stateSlip: (days: number) => `ETA ${days} ${days === 1 ? 'day' : 'days'} after plan`,
   stateEarly: (days: number) => `ETA ${days} ${days === 1 ? 'day' : 'days'} before plan`,
   stateOnPlan: 'On plan',

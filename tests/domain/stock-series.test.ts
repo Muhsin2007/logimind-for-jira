@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPipelineIndex, projectCover } from '../../src/domain/cover';
+import { buildPipelineIndex, coverFor, projectCover } from '../../src/domain/cover';
 import { demoInventoryCsv, demoShipmentsCsv } from '../../src/domain/demo-data';
 import { importCsv } from '../../src/domain/importer';
 import { seriesFor, stockSeries } from '../../src/domain/stock-series';
@@ -43,9 +43,37 @@ describe('stockSeries', () => {
     expect(stockSeries({ available: 10, safetyStock: 5, dailyUsage: Number.NaN, arrivals: [] }, TODAY, 2).flat).toBe(true);
   });
 
-  it('starts at zero when stock is already negative and clamps the window', () => {
-    const s = stockSeries({ available: -5, safetyStock: 5, dailyUsage: 1, arrivals: [] }, TODAY, 999);
-    expect(s.points[0].level).toBe(0);
+  it('keeps a reservation shortfall: arrivals first cover what is already reserved', () => {
+    const s = stockSeries({ available: -50, safetyStock: 5, dailyUsage: 1, arrivals: [{ date: '2026-11-05', qty: 40 }, { date: '2026-11-06', qty: 30 }] }, TODAY, 5);
+    // -50 + 40 = -10 is still short (shown as 0); +30 more leaves 20.
+    expect(s.points.map((p) => p.level)).toEqual([0, 0, 0, 0, 20, 19]);
+    expect(s.stockOut).toBe(0);
+    expect(projectCover({ available: -50, safetyStock: 5, dailyUsage: 1, arrivals: [] }, TODAY).daysOfCover).toBe(0);
+  });
+
+  it('draws the line through the exact moment stock runs out, matching days of cover', () => {
+    const input = { available: 15, safetyStock: 0, dailyUsage: 10, arrivals: [{ date: '2026-11-06', qty: 30 }] };
+    const s = stockSeries(input, TODAY, 6);
+    expect(s.stockOut).toBe(1.5);
+    expect(Math.floor(s.stockOut ?? -1)).toBe(projectCover(input, TODAY).daysOfCover);
+    expect(s.path.slice(0, 7)).toEqual([
+      { day: 0, level: 15 }, { day: 1, level: 5 }, { day: 1.5, level: 0 }, { day: 2, level: 0 },
+      { day: 3, level: 0 }, { day: 4, level: 0 }, { day: 4, level: 30 },
+    ]);
+  });
+
+  it('treats an arrival landing exactly as stock hits zero as just in time, like days of cover', () => {
+    const input = { available: 20, safetyStock: 0, dailyUsage: 10, arrivals: [{ date: '2026-11-04', qty: 30 }] };
+    // Not a stock-out on day 2; the refilled stock runs out on day 5.
+    expect(projectCover(input, TODAY).daysOfCover).toBe(5);
+    const s = stockSeries(input, TODAY, 6);
+    expect(s.stockOut).toBe(5);
+    expect(s.points.map((p) => p.level)).toEqual([20, 10, 30, 20, 10, 0, 0]);
+    expect(stockSeries(input, TODAY, 4).stockOut).toBeNull();
+  });
+
+  it('clamps the window', () => {
+    const s = stockSeries({ available: 5, safetyStock: 5, dailyUsage: 1, arrivals: [] }, TODAY, 999);
     expect(s.days).toBe(90);
     expect(stockSeries({ available: 1, safetyStock: 0, dailyUsage: 1, arrivals: [] }, TODAY, 0).days).toBe(1);
   });
@@ -61,5 +89,18 @@ describe('stockSeries', () => {
     expect(series.arrivals).toEqual([{ day: 21, date: '2026-11-23', qty: 100 }]);
     expect(series.points[19].level).toBe(0);
     expect(series.points[21].level).toBe(100);
+  });
+
+  it('marks the same stock-out day as days of cover for every demo position', () => {
+    const s = importCsv(demoShipmentsCsv(TODAY));
+    const i = importCsv(demoInventoryCsv(TODAY));
+    if (!s.ok || s.kind !== 'shipments' || !i.ok || i.kind !== 'inventory') throw new Error('demo data invalid');
+    const pipeline = buildPipelineIndex(s.records);
+    for (const item of i.records) {
+      const cover = coverFor(item, pipeline, TODAY);
+      const out = seriesFor(item, pipeline, TODAY, 90).stockOut;
+      const expected = cover.daysOfCover !== null && cover.daysOfCover <= 90 ? cover.daysOfCover : null;
+      expect(out === null ? null : Math.floor(out), `${item.sku}@${item.warehouse}`).toBe(expected);
+    }
   });
 });

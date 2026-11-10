@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import { daysBetween } from '../../../src/domain/dates';
 import type { StockSeries } from '../../../src/domain/stock-series';
 import type { InboundTimeline, TimelineItem } from '../../../src/domain/timeline';
@@ -86,18 +85,9 @@ const W = 640;
 const H = 220;
 const PAD = { left: 44, right: 16, top: 20, bottom: 28 };
 
-/** Polyline points that show arrivals as vertical jumps instead of slopes. */
-function linePoints(series: StockSeries, x: (day: number) => number, y: (v: number) => number): string {
-  const usage = series.flat ? 0 : (series.dailyUsage ?? 0);
-  const out: string[] = [];
-  let prev: number | null = null;
-  for (const p of series.points) {
-    if (prev !== null && p.arrival > 0) out.push(`${x(p.day)},${y(Math.max(0, prev - usage))}`);
-    out.push(`${x(p.day)},${y(p.level)}`);
-    prev = p.level;
-  }
-  return out.join(' ');
-}
+/** Polyline points from the domain path (arrivals are jumps; a drop to zero meets 0 exactly). */
+const linePoints = (series: StockSeries, x: (day: number) => number, y: (v: number) => number): string =>
+  series.path.map((p) => `${x(p.day)},${y(p.level)}`).join(' ');
 
 /** A round axis maximum: 10, 20, …, 100, 200, … */
 const niceMax = (v: number) => {
@@ -120,7 +110,6 @@ export function StockChart({ series, stockOutDate, belowSafetyDate, compare, com
 }) {
   const { t, fmt } = useI18n();
   const d = t.design;
-  const summaryId = useId();
   const today = series.points[0].date;
   const all = [...series.points, ...(compare?.points ?? [])].map((p) => p.level);
   const top = niceMax(Math.max(series.safetyStock, ...all) * 1.1);
@@ -139,7 +128,7 @@ export function StockChart({ series, stockOutDate, belowSafetyDate, compare, com
 
   return (
     <figure className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} className="chart-svg" role="img" aria-labelledby={summaryId}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="chart-svg" aria-hidden="true" focusable="false">
         {series.safetyStock > 0 && (
           <rect className="ch-danger-zone" x={PAD.left} y={y(series.safetyStock)} width={W - PAD.left - PAD.right} height={y(0) - y(series.safetyStock)} />
         )}
@@ -166,11 +155,11 @@ export function StockChart({ series, stockOutDate, belowSafetyDate, compare, com
             <text className="ch-label" x={x(a.day)} y={y(series.points[a.day].level) - 9} textAnchor="middle">+{fmt.number(a.qty)}</text>
           </g>
         ))}
-        {inWindow(stockOutDate) && <StockOutMark x={x(dayOf(stockOutDate))} y={y(0)} />}
-        {compare && inWindow(compareStockOutDate) && <StockOutMark x={x(dayOf(compareStockOutDate))} y={y(0)} compare />}
+        {series.stockOut !== null && <StockOutMark x={x(series.stockOut)} y={y(0)} />}
+        {compare && compare.stockOut !== null && <StockOutMark x={x(compare.stockOut)} y={y(0)} compare />}
       </svg>
       <figcaption>
-        <p id={summaryId} className="chart-summary">{summary}</p>
+        <p className="chart-summary">{summary}</p>
         <ul className="chart-legend" aria-label={d.legend}>
           <li><span className="lg-swatch lg-line" aria-hidden="true" />{compare ? d.chartTodayLine : d.chartLevel}</li>
           {compare && <li><span className="lg-swatch lg-line-compare" aria-hidden="true" />{d.chartWithDelay}</li>}

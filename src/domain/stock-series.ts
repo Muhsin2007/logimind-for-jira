@@ -10,7 +10,7 @@ export interface StockPoint {
   /** Whole days from today (0 = today). */
   day: number;
   date: IsoDate;
-  /** Units available at the start of the day, after that day's arrivals; never below 0. */
+  /** Units available at the start of the day, after that day's arrivals; never below 0 (a shortfall shows as 0). */
   level: number;
   /** Units arriving that day. */
   arrival: number;
@@ -26,7 +26,16 @@ export interface StockSeries {
   points: StockPoint[];
   /** Arrivals counted in the window, by day. */
   arrivals: { day: number; date: IsoDate; qty: number }[];
+  /** Vertices of the drawn line: arrivals are vertical jumps, and a drop to zero meets 0 at its exact time. */
+  path: { day: number; level: number }[];
+  /**
+   * When stock first runs out, in (fractional) days from today, or null if not in the window.
+   * `Math.floor(stockOut)` equals `projectCover().daysOfCover` for the same input.
+   */
+  stockOut: number | null;
 }
+
+const EPSILON = 1e-9;
 
 /** Hides floating-point noise from fractional daily usage. */
 const tidy = (n: number) => Math.round(n * 1000) / 1000;
@@ -50,12 +59,30 @@ export function stockSeries(input: CoverInput, today: IsoDate, days = 30): Stock
   }
 
   const points: StockPoint[] = [];
-  let level = Math.max(0, input.available);
+  const path: { day: number; level: number }[] = [];
+  let stockOut: number | null = null;
+  const shown = (balance: number) => tidy(Math.max(0, balance));
+  // A negative balance is stock already reserved: arrivals cover it first. Daily use is only
+  // taken from stock that exists; demand while out of stock is lost, not carried over.
+  let balance = input.available;
   for (let day = 0; day <= window; day++) {
-    if (day > 0) level = Math.max(0, level - usage);
     const arrival = byDay.get(day) ?? 0;
-    level = tidy(level + arrival);
-    points.push({ day, date: addDays(today, day), level, arrival });
+    if (day > 0 && balance > 0) {
+      const after = balance - usage;
+      // Reaching zero exactly as a shipment lands is just in time (as in projectCover).
+      const ranOut = after < -EPSILON || (after <= EPSILON && arrival === 0);
+      if (ranOut) {
+        const at = tidy(day - 1 + balance / usage);
+        stockOut ??= at;
+        if (at < day) path.push({ day: at, level: 0 });
+      }
+      balance = Math.max(0, after);
+    }
+    if (arrival > 0) path.push({ day, level: shown(balance) });
+    balance += arrival;
+    if (day === 0 && stockOut === null && balance <= EPSILON && usage > 0) stockOut = 0;
+    points.push({ day, date: addDays(today, day), level: shown(balance), arrival });
+    path.push({ day, level: shown(balance) });
   }
 
   return {
@@ -65,6 +92,8 @@ export function stockSeries(input: CoverInput, today: IsoDate, days = 30): Stock
     flat: !usable,
     points,
     arrivals: [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([day, qty]) => ({ day, date: addDays(today, day), qty })),
+    path,
+    stockOut,
   };
 }
 

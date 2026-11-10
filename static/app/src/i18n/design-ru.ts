@@ -18,7 +18,7 @@ export const designRu: DesignMessages = {
   legendOverdue: 'Просрочена',
   timelineRow: (id: string, sku: string, warehouse: string, planned: string, expected: string, state: string) =>
     `${id}: ${sku} на склад ${warehouse}. План ${planned}, ожидается ${expected}. ${state}.`,
-  stateOverdue: (n: number) => `Просрочена на ${days(n)} от плана`,
+  stateOverdue: (n: number) => `Просрочена на ${days(n)}`,
   stateSlip: (n: number) => `ETA на ${days(n)} позже плана`,
   stateEarly: (n: number) => `ETA на ${days(n)} раньше плана`,
   stateOnPlan: 'По плану',
@@ -41,9 +41,10 @@ export const designRu: DesignMessages = {
   chartFlat: 'В файле остатков нет дневного расхода, поэтому линия растёт только с поступлениями. Добавьте колонку daily_usage, чтобы увидеть, когда запас закончится.',
   chartSummary: (start: string, end: string, n: number, safety: string) =>
     `Прогноз запаса: ${start} сегодня, ${end} через ${days(n)}; страховой запас ${safety}.`,
-  chartSummaryOut: (date: string) => ` Закончится ${date}.`,
-  chartSummaryBelow: (date: string) => ` Ниже страхового запаса с ${date}.`,
-  chartSummaryCompareOut: (date: string) => ` С задержкой закончится ${date}.`,
+  // RU dates end in «г.», so no extra full stop.
+  chartSummaryOut: (date: string) => ` Закончится ${date}`,
+  chartSummaryBelow: (date: string) => ` Ниже страхового запаса с ${date}`,
+  chartSummaryCompareOut: (date: string) => ` С задержкой закончится ${date}`,
   chartTodayLine: 'Текущий план',
   chartArrivals: 'Ожидаемые поступления',
   chartNoArrivals: 'В этом окне не ожидается ни одной открытой поставки.',

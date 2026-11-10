@@ -1,6 +1,7 @@
 import { useDeferredValue, useId, useMemo, useState, type ReactNode } from 'react';
 import { buildPipelineIndex } from '../../../../src/domain/cover';
-import { seriesFor } from '../../../../src/domain/stock-series';
+import { daysBetween } from '../../../../src/domain/dates';
+import { MAX_SERIES_DAYS, seriesFor } from '../../../../src/domain/stock-series';
 import { delayCandidates, MAX_DELAY_DAYS, simulateDelay, type StockOutlook, type WhatIfResult } from '../../../../src/domain/what-if';
 import { call, useAsync, type InventoryRow, type Shipment } from '../api';
 import { StockChart } from '../charts';
@@ -10,8 +11,10 @@ import { useI18n } from '../i18n';
 
 type Mode = 'shipment' | 'supplier';
 const DEFAULT_DELAY = 7;
-/** Long enough to show a 30-day delay landing. */
-const CHART_DAYS = 45;
+/** Shortest comparison window; it grows so the latest delayed arrival lands with a week to spare. */
+const MIN_CHART_DAYS = 45;
+const chartDays = (today: string, arrivals: string[]): number =>
+  Math.min(MAX_SERIES_DAYS, Math.max(MIN_CHART_DAYS, ...arrivals.map((date) => daysBetween(today, date) + 7)));
 
 /**
  * Read-only "what if shipments arrive later?". The same domain code as the server runs here in
@@ -185,9 +188,10 @@ function CompareChart({ result, shipments, items, chartKey, onChartKey }: {
     if (!item) return null;
     const moved = new Map(result.shipments.map((s) => [s.id, s.to]));
     const delayed = shipments.map((s) => (moved.has(s.id) ? { ...s, eta: moved.get(s.id) ?? s.eta } : s));
+    const days = chartDays(result.today, result.shipments.map((s) => s.to));
     return {
-      before: seriesFor(item, buildPipelineIndex(shipments), result.today, CHART_DAYS),
-      after: seriesFor(item, buildPipelineIndex(delayed), result.today, CHART_DAYS),
+      before: seriesFor(item, buildPipelineIndex(shipments), result.today, days),
+      after: seriesFor(item, buildPipelineIndex(delayed), result.today, days),
     };
   }, [item, result, shipments]);
   if (!item || !charts) return null;
