@@ -5,7 +5,7 @@ Draft for the author to review and paste. Nothing here has been submitted.
 **Project name:** LogiMind for Jira
 **Tagline:** Turn logistics chaos into clear action inside Jira.
 **Category:** Apps for Specialized Industries
-**Bonus prize (one only):** Best app with Atlassian MCP *(select once a real MCP client call has been shown live — see the MCP write-up below)*; Best Agents – Rovo only if the agent can be shown working on a Rovo-enabled site
+**Bonus prize (one only):** Best app with Atlassian MCP *(shown live 2026-11-10: Claude Code → Atlassian MCP → LogiMind tools on a Jira site without Rovo)*
 
 ## Inspiration
 Small importers and distributors run purchasing and operations work in Jira, but their shipments and stock live in spreadsheets. Late containers and stock-outs are discovered too late, and nobody can say which delay actually hurts. We wanted the logistics picture — and the follow-up work — in the same place.

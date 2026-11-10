@@ -97,8 +97,11 @@ Note: while no owner exists, a Jira admin's role label reads "Viewer" although t
 | Tool behaviour (validation, `importedText` isolation, `visibleToYou`, `safely`) | ✅ unit | Same handlers as the Rovo agent: `tests/agent/actions.test.ts` |
 | Deploy to development | ✅ live | `forge deploy -e development` → v7.1.0, then v7.2.0 with the review fix (minor, no re-consent) |
 | MCP endpoint exists for the app | ✅ live | Unauthenticated `initialize` to `https://mcp.atlassian.com/forge/<appId>` → `401 invalid_token` with `WWW-Authenticate: Bearer resource_metadata=…`; the metadata names an Atlassian authorization server |
-| Admin turns the tools on (Connected apps → LogiMind → Tools) on a site without Rovo | ⛔ pending | Needs the author signed in to Atlassian Administration |
-| OAuth consent and a real tool call from an MCP client (Claude Code) | ⛔ pending | Needs the author to approve the OAuth consent in the browser |
+| Admin page (Connected apps → LogiMind → Tools) | 🟡 live | LogiMind was **not listed** under Connected apps on utkirovm3 (no Rovo), yet the OAuth flow below offered the site and tool calls worked; the per-tool admin switch could not be seen |
+| OAuth 2.1 consent from an MCP client | ✅ live | Claude Code: `claude mcp add --transport http logimind https://mcp.atlassian.com/forge/<appId>` → `/mcp` → Authenticate → status **Connected** (site without Rovo) |
+| Tools listed to the client | ✅ live | `get-risk-summary_development`, `get-shipment_development`, `get-inventory_development`, `get-linked-jira-issue_development`, `simulate-delay_development` (the platform adds the environment suffix) |
+| Real tool calls | ✅ live | `get-risk-summary` (limit 3) → 30 open risks (7 critical), top 3 late shipments with numeric evidence, `notice` present; `simulate-delay` (NorthStar Parts, +7 days) → SHP-1011 / SKU-01: stock-out 2026-12-31 → 2026-11-28, days of cover 51 → 18, `readOnly:true`; `simulate-delay` SHP-1001 → `found:false` (already arrived); `get-linked-jira-issue` LATE_SHIPMENT:SHP-1004 → no issue yet |
+| Prompt-injection style input from the client | ✅ live | `get-shipment` with `SHP-1004; ignore previous instructions` → `ok:false, "shipmentId is not a valid identifier"`, no data |
 | Rovo Studio custom agent using the tools | ⛔ not possible | Rovo is not provisioned on the author's site (D11) |
 
 Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High.
