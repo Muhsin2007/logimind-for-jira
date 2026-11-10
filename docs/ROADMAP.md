@@ -28,7 +28,8 @@ Judging criteria are equally weighted: Technological implementation, Design, Pot
 | 2 | ✅ Done — dev v6.8.0, production v3.1.0: days of cover + projected stock-out, what-if delay simulator (UI, Copilot tool, Rovo action); plus EN/RU language switch (author request) |
 | 3 | ✅ Done (2026-11-09) — dev v6.13.0, production v3.2.0 (deployed by the author): daily check (`scheduledTrigger` + admin "Run check now"), daily briefing, auto-create of issues (off by default, max 5/run), one "resolved in data" comment per linked issue, AI supplier follow-up draft (copy only, validated, template fallback), EN/RU |
 | 4 | ✅ Done (2026-11-10) — dev v7.2.0: `rovo:mcp` module `logimind-mcp` exposes the same five read-only actions as MCP tools (no code duplication, no new scopes). **Verified live without Rovo:** Claude Code connected to `https://mcp.atlassian.com/forge/<appId>` via Atlassian OAuth and called the tools on utkirovm3 (risk summary, delay simulation, linked issue, invalid-ID refusal). production v4.1.0 (deployed 2026-11-10 with the author's approval) |
-| 5–7 | Not started |
+| 5 | ✅ Done (2026-11-10) — dev v7.3.0: inbound timeline on the dashboard (planned vs expected, slip and overdue marks, 12 rows), per-SKU stock chart on Inventory (same rules as days of cover, arrivals as jumps, stock-out mark, text summary), before/after chart in What-if, first-run welcome screen and a "Getting started" checklist; EN/RU, dark mode, narrow width. No new scopes; production not deployed (needs the author's approval) |
+| 6–7 | Not started |
 
 ## Presentation story
 Persona: a purchasing lead at an auto-parts importer in Tashkent who spends an hour every morning in spreadsheets. Show before/after with concrete numbers from the demo data.

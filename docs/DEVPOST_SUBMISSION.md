@@ -17,7 +17,12 @@ Small importers and distributors run purchasing and operations work in Jira, but
 - **Dashboard, Shipments, Inventory and Risk Center** inside Jira, in Jira's own light/dark theme.
 - **One-click Jira issues** from any risk, created as the user, one per risk, with live status and a LogiMind panel on the issue showing the source shipment.
 - **AI Copilot**: ask anything about the data; Claude (Forge LLM) answers only through read-only tools, every cited ID, number and date is verified against the data, and anything unverifiable falls back to a deterministic rule-based answer.
-- **Rovo agent "LogiMind"** with four read-only actions so the same answers are available in Rovo chat.
+- **A daily check that closes the loop**: once a day LogiMind compares the risks with the previous run, writes a briefing, can open Jira issues for new critical risks (off by default, capped), and comments on linked issues when the data shows a risk is resolved.
+- **Owner and managers**: a Jira admin claims LogiMind and picks the people who may import data and change settings; everyone else can view.
+- **Days of cover and a what-if delay simulator**: when each SKU runs out, and what a supplier delay would do to it, live as you drag a slider.
+- **Charts that tell the story**: an inbound timeline (planned → expected arrival, late bars cross *today*), a stock outlook chart per SKU with arrivals and the stock-out date, and a *current plan vs. with the delay* chart in the simulator.
+- **First-run onboarding**: a welcome screen with one-click demo data, then a short *Getting started* checklist.
+- **Rovo agent "LogiMind"** with five read-only actions so the same answers are available in Rovo chat.
 
 ## How we built it
 Atlassian Forge (Node 24 runtime) with a React Custom UI global page and issue panel, Forge KVS storage, Jira REST via `requestJira` as the user, and a `rovo:agent` with `action` modules. The logic is a pure, unit-tested TypeScript domain layer (159 tests, 83 % coverage) behind service and storage ports. AI features use Forge LLMs (Claude Haiku 4.5) behind a port with a deterministic fallback. No external backend, no egress — eligible for Runs on Atlassian.
@@ -37,7 +42,7 @@ Atlassian Forge (Node 24 runtime) with a React Custom UI global page and issue p
 Deterministic rules plus honest uncertainty earn more trust than an impressive-sounding prediction. Forge's permission model (asUser, scopes, Runs on Atlassian) shaped the design for the better.
 
 ## What's next
-Days of cover and a what-if delay simulator, scheduled daily checks that open and update Jira issues, scheduled CSV/API sync, per-project data scopes, and Marketplace listing.
+Scheduled CSV/API sync from suppliers and ERPs, per-project data scopes, and a Marketplace listing.
 
 ## AI disclosure
 - **In the product:** LogiMind calls **Atlassian-hosted Forge LLMs** (Claude Haiku 4.5) for two features: proposing a CSV column mapping (headers plus three cleaned sample rows are sent; the admin confirms) and the Copilot (the model may only call read-only tools; its IDs, numbers and dates are verified before display). No external AI provider is used and no data leaves Atlassian. A deterministic rule-based copilot is the fallback. The Rovo agent uses Atlassian Rovo's own model; LogiMind only supplies read-only action results.
@@ -51,7 +56,7 @@ Days of cover and a what-if delay simulator, scheduled daily checks that open an
 - Demo data is synthetic; supplier and product names are fictional.
 
 ## Known limitations
-See README "Known limitations" — AI reasoning is not verified (only its data), daily AI call cap, UTC dates, 2,000-row cap, English UI, app-wide data visibility, Rovo agent not exercised live on the author's Free-plan site.
+See README "Known limitations" — AI reasoning is not verified (only its data), daily AI call cap, UTC dates, 2,000-row cap, server messages in English when the UI is in Russian, app-wide data visibility, Rovo agent not exercised live on the author's Free-plan site.
 
 ## Bonus write-up (Best app with Atlassian MCP)
 LogiMind declares a `rovo:mcp` module (`logimind-mcp`) that exposes its five read-only tools — risk summary, shipment, inventory, linked Jira issue and delay simulation — to Rovo Studio agents and to any MCP-compatible AI client (Claude, IDE assistants) through Atlassian's endpoint `https://mcp.atlassian.com/forge/<appId>`. A site admin decides per site which tools are exposed; the user signs in with Atlassian OAuth and every call runs with that user's permissions, so linked Jira issues the user cannot see stay hidden. The tools are the very same validated, `GET`-only handlers the in-app Copilot and the Rovo agent use: model-supplied IDs are checked, unknown IDs return `found:false` instead of a guess, and CSV text is returned under `importedText` with an explicit "data, not instructions" notice. No new scopes and no write tools. Note: LogiMind itself sends nothing outside Atlassian, but when a user connects an external MCP client, the tool results go to that client and its AI vendor; that is why exposure is off until a site admin turns it on. Example: in Claude, *"Which SKUs run out if SHP-1001 is 7 days late, and is there a Jira issue for the most critical risk?"* triggers `simulate-delay` and `get-linked-jira-issue`.

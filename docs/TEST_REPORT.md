@@ -115,6 +115,20 @@ Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High.
   - the UI `listIssueLinks` resolver still returns stored keys of issues the user cannot see;
   - with an external MCP client, tool results leave Atlassian for that client's AI vendor (admin opt-in).
 
+## Roadmap week 5: design (2026-11-10, dev v7.3.0)
+
+| Check | Status | Evidence |
+|---|---|---|
+| Full suite | ✅ | `npx vitest run`: **338 passed** (29 files); UI build OK; both `tsc --noEmit` clean; `forge lint` no issues |
+| Timeline domain (range, order, slip, overdue, 12-row cap, early ETA after planned date) | ✅ unit | `tests/domain/timeline.test.ts` |
+| Stock series (arrival jumps, reservations shortfall, exact crossing, just-in-time arrival, window clamp, stock-out = days of cover for every demo position) | ✅ unit | `tests/domain/stock-series.test.ts` |
+| EN/RU dictionaries have the same shape | ✅ unit | i18n parity test |
+| Visual check in a local preview (mocked bridge, demo data) | ✅ | Dashboard timeline, Inventory chart, What-if before/after, welcome screen (owner and viewer), checklist; light/dark, EN/RU, narrow width |
+| Deploy to development | ✅ live | `forge deploy -e development` → v7.3.0 (minor) |
+| Production | ⏸ | Not deployed; waits for the author's approval |
+
+Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High/Medium. Fixed after review: reservations in the stock series; stock-out mark at the exact crossing; overdue counted from the planned date when the ETA is earlier; Inventory table no longer waits for shipments; What-if chart window grows to the latest delayed arrival (max 90 days); SVG `aria-hidden` with a text summary; row keys via `JSON.stringify`. Also fixed: doubled full stop after RU dates in the chart summary.
+
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
 

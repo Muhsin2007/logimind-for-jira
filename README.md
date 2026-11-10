@@ -17,6 +17,7 @@ Built for **Codegeist 2026** — category *Apps for Specialized Industries*, bon
 | **What-if delay simulator** | Pick a shipment (or all upcoming shipments of a supplier) and drag a 0–30 day slider: see live which SKUs/warehouses would go below safety stock or run out, and when, compared with today. Read-only; also available to the AI Copilot and the Rovo agent. |
 | **English / Russian** | Compact EN / RU switch in the app header (English by default, remembered per person). The AI Copilot answers in the chosen language. |
 | **Dashboard & screens** | KPIs (late shipments, on-time rate, SKUs below safety stock, value at risk), Shipments, Inventory, Risk Center, shipment drawer. Follows Jira's light/dark theme. |
+| **Charts & first run** | An **inbound timeline** on the Dashboard (each open shipment from planned to expected arrival; overdue bars cross the today line; a row opens the shipment). A **stock outlook chart** per SKU and warehouse on Inventory (projected units, safety stock, arrivals, stock-out date), and a *current plan vs. with the delay* chart in the what-if simulator. An empty site opens on a **welcome screen** with one-click demo data, then a short *Getting started* checklist (remembered per person, can be hidden). Charts have text summaries for screen readers. |
 | **Jira integration** | "Create Jira issue" from any risk, created **as the user** in an admin-chosen project. One issue per risk (duplicate-safe), live status, and a **LogiMind panel on the Jira issue** showing the source shipment. |
 | **AI Copilot** | Free-form questions ("which delays hurt stock the most?") answered by Claude (Forge LLM) that may only call LogiMind's read-only tools. Every ID, number and date in the answer is checked against the data; an unverifiable answer, a model error or an unavailable model falls back to the deterministic rule-based copilot, and the answer says so. Facts with cited IDs, next steps, and an explicit list of unknowns. |
 | **Rovo agent** | `LogiMind` agent with five read-only actions (risk summary, shipment, inventory, linked Jira issue, delay simulation). Imported text is isolated and treated as untrusted data. |
@@ -86,7 +87,7 @@ The `llm` module uses Atlassian-hosted Forge LLMs (Claude). No external egress a
 - In Russian, import validation messages, rule-based copilot answers and Jira issue text stay in English (the AI Copilot answers in Russian).
 - Days of cover and the what-if simulator use an average daily usage from the file: they are projections, not forecasts, and do not create risks.
 - The Rovo agent requires Rovo on the site; it could not be exercised live on the author's Free-plan developer site (see [docs/TEST_REPORT.md](docs/TEST_REPORT.md)).
-- Logistics data is app-wide on a site: anyone who can open LogiMind or use the agent can read it; only Jira administrators can change it.
+- Logistics data is app-wide on a site: anyone who can open LogiMind or use the agent can read it; only the LogiMind owner and managers (or Jira administrators, until an owner is set) can change it.
 
 ## Docs
 
