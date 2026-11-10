@@ -1,12 +1,17 @@
 import { useDeferredValue, useId, useMemo, useState, type ReactNode } from 'react';
-import { delayCandidates, MAX_DELAY_DAYS, simulateDelay, type StockOutlook } from '../../../../src/domain/what-if';
-import { call, useAsync } from '../api';
+import { buildPipelineIndex } from '../../../../src/domain/cover';
+import { seriesFor } from '../../../../src/domain/stock-series';
+import { delayCandidates, MAX_DELAY_DAYS, simulateDelay, type StockOutlook, type WhatIfResult } from '../../../../src/domain/what-if';
+import { call, useAsync, type InventoryRow, type Shipment } from '../api';
+import { StockChart } from '../charts';
 import { Callout, CoverValue, EmptyState, ErrorState, Loading, Panel, Segmented, SeverityBadge } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
 
 type Mode = 'shipment' | 'supplier';
 const DEFAULT_DELAY = 7;
+/** Long enough to show a 30-day delay landing. */
+const CHART_DAYS = 45;
 
 /**
  * Read-only "what if shipments arrive later?". The same domain code as the server runs here in
@@ -24,6 +29,7 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
   const [shipmentId, setShipmentId] = useState(whatIfShipmentId ?? '');
   const [supplier, setSupplier] = useState('');
   const [delay, setDelay] = useState(DEFAULT_DELAY);
+  const [chartKey, setChartKey] = useState('');
   // The slider moves at once; the simulation and its announcement follow when React has time.
   const deferredDelay = useDeferredValue(delay);
 
@@ -152,9 +158,60 @@ export function WhatIf({ dataVersion, whatIfShipmentId }: NavProps) {
             </table>
           </div>
         )}
+        {result.rows.length > 0 && result.delayDays > 0 && (
+          <CompareChart result={result} shipments={state.data.shipments} items={state.data.items} chartKey={chartKey} onChartKey={setChartKey} />
+        )}
         {result.untracked.length > 0 && <p className="footnote">{t.untracked(result.untracked.join(', '))}</p>}
         <p className="footnote">{t.coverNote}</p>
       </Panel>
+    </div>
+  );
+}
+
+/** Stock line today and with the delay, for one affected position (the worst first). */
+function CompareChart({ result, shipments, items, chartKey, onChartKey }: {
+  result: WhatIfResult;
+  shipments: Shipment[];
+  items: InventoryRow[];
+  chartKey: string;
+  onChartKey: (key: string) => void;
+}) {
+  const { t } = useI18n();
+  const d = t.design;
+  const id = useId();
+  const row = result.rows.find((r) => r.entityKey === chartKey) ?? result.rows[0];
+  const item = items.find((i) => `${i.sku}@${i.warehouse}` === row.entityKey);
+  const charts = useMemo(() => {
+    if (!item) return null;
+    const moved = new Map(result.shipments.map((s) => [s.id, s.to]));
+    const delayed = shipments.map((s) => (moved.has(s.id) ? { ...s, eta: moved.get(s.id) ?? s.eta } : s));
+    return {
+      before: seriesFor(item, buildPipelineIndex(shipments), result.today, CHART_DAYS),
+      after: seriesFor(item, buildPipelineIndex(delayed), result.today, CHART_DAYS),
+    };
+  }, [item, result, shipments]);
+  if (!item || !charts) return null;
+
+  return (
+    <div className="whatif-chart">
+      <div className="whatif-chart-head">
+        <h3 className="field-label">{d.whatIfChartTitle(row.sku, row.warehouse)}</h3>
+        {result.rows.length > 1 && (
+          <label className="inline-field" htmlFor={`${id}-pos`}>
+            <span className="muted">{d.whatIfChartPick}</span>
+            <select id={`${id}-pos`} className="input input-sm" value={row.entityKey} onChange={(e) => onChartKey(e.target.value)}>
+              {result.rows.map((r) => <option key={r.entityKey} value={r.entityKey}>{r.entityKey}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      <StockChart
+        series={charts.before}
+        stockOutDate={row.before.cover.stockOutDate}
+        belowSafetyDate={row.before.cover.belowSafetyDate}
+        compare={charts.after}
+        compareStockOutDate={row.after.cover.stockOutDate}
+      />
     </div>
   );
 }

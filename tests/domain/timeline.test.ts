@@ -29,8 +29,8 @@ describe('inboundTimeline', () => {
   it('spans the shipments, at least a week ahead, within the past/horizon limits', () => {
     const tl = inboundTimeline([ship('A', '2026-09-01', '2026-09-01'), ship('B', '2026-11-04', '2027-03-01')], TODAY, { pastDays: 14, horizonDays: 42 });
     expect(tl.start).toBe('2026-10-19');
-    expect(tl.end).toBe('2026-12-14');
-    // B lands after the horizon: counted, not drawn.
+    // B lands after the horizon: counted, not drawn, and it does not stretch the range.
+    expect(tl.end).toBe('2026-11-09');
     expect(tl.items.map((i) => i.id)).toEqual(['A']);
     expect(tl.later).toBe(1);
     const small = inboundTimeline([ship('C', '2026-11-03', '2026-11-03')], TODAY);
@@ -51,6 +51,12 @@ describe('inboundTimeline', () => {
     const tl = inboundTimeline(many, TODAY, { maxItems: 25 });
     expect(tl.items).toHaveLength(25);
     expect(tl.later).toBe(5);
+  });
+
+  it('fits the range to the drawn shipments only', () => {
+    const tl = inboundTimeline([ship('A', '2026-11-03', '2026-11-12'), ship('B', '2026-11-20', '2026-12-01')], TODAY, { maxItems: 1 });
+    expect(tl.items.map((i) => i.id)).toEqual(['A']);
+    expect(tl.end).toBe('2026-11-12');
   });
 
   it('draws the demo pipeline (overdue SHP-1004 first, nothing past six weeks)', () => {

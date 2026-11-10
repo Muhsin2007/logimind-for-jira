@@ -44,7 +44,7 @@ const maxDate = (a: IsoDate, b: IsoDate) => (a > b ? a : b);
 
 /**
  * Open shipments on a calendar: planned → expected arrival for each, earliest first. The range
- * covers the shipments' dates, reaching back at most `pastDays` and ahead at most `horizonDays`.
+ * covers the drawn shipments' dates, reaching back at most `pastDays` and ahead at most `horizonDays`.
  */
 export function inboundTimeline(shipments: Shipment[], today: IsoDate, options: TimelineOptions = {}): InboundTimeline {
   const { pastDays = 14, horizonDays = 42, maxItems = 25 } = options;
@@ -72,15 +72,15 @@ export function inboundTimeline(shipments: Shipment[], today: IsoDate, options: 
     })
     .sort((a, b) => a.expected.localeCompare(b.expected) || a.id.localeCompare(b.id));
 
+  const items = open.filter((i) => i.expected <= horizon).slice(0, Math.max(0, maxItems));
+
+  // The range fits the drawn rows only, so a long tail of hidden shipments does not squash them.
   let start = today;
   let end = addDays(today, MIN_AHEAD_DAYS);
-  for (const i of open) {
+  for (const i of items) {
     start = minDate(start, maxDate(floor, minDate(i.planned, i.expected)));
     end = maxDate(end, minDate(horizon, maxDate(i.planned, i.expected)));
   }
-
-  const inRange = open.filter((i) => i.expected <= horizon);
-  const items = inRange.slice(0, Math.max(0, maxItems));
 
   const ticks: IsoDate[] = [];
   const back = Math.floor(daysBetween(start, today) / 7);

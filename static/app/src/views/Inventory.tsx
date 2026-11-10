@@ -1,13 +1,30 @@
 import { useMemo, useState } from 'react';
-import { call, useAsync } from '../api';
+import { call, useAsync, type InventoryRow } from '../api';
 import { CoverValue, EmptyState, ErrorState, Loading, Meter, SearchField, Segmented, SeverityBadge } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
+import { StockOutlookPanel } from './Outlook';
 
 type StockFilter = 'all' | 'below';
 
+const keyOf = (i: InventoryRow) => `${i.sku}@${i.warehouse}`;
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+
+/** The position to chart first: the most severe risk, then the earliest stock-out. */
+function firstToChart(items: InventoryRow[]): InventoryRow | undefined {
+  return [...items].sort(
+    (a, b) =>
+      (a.risk ? SEV_RANK[a.risk.severity] : 9) - (b.risk ? SEV_RANK[b.risk.severity] : 9) ||
+      (a.cover.stockOutDate ?? '9999').localeCompare(b.cover.stockOutDate ?? '9999'),
+  )[0];
+}
+
 export function Inventory({ dataVersion }: NavProps) {
-  const state = useAsync(() => call('listInventory'), [dataVersion]);
+  const state = useAsync(
+    () => Promise.all([call('listInventory'), call('listShipments')]).then(([i, s]) => ({ today: i.today, items: i.items, shipments: s.shipments })),
+    [dataVersion],
+  );
+  const [chartKey, setChartKey] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StockFilter>('all');
   const { t, fmt } = useI18n();
@@ -32,6 +49,7 @@ export function Inventory({ dataVersion }: NavProps) {
   const critical = items.filter((i) => i.risk?.severity === 'critical').length;
   const below = items.filter((i) => i.shortfall > 0).length;
   const noUsage = items.filter((i) => i.cover.dailyUsage === null || i.cover.dailyUsage <= 0).length;
+  const charted = items.find((i) => keyOf(i) === chartKey) ?? firstToChart(items);
 
   return (
     <div className="stack">
@@ -53,6 +71,8 @@ export function Inventory({ dataVersion }: NavProps) {
           <span className="summary-label">{t.sumNoUsage}</span>
         </div>
       </div>
+
+      {charted && <StockOutlookPanel item={charted} shipments={state.data.shipments} today={state.data.today} />}
 
       <div className="toolbar" role="search">
         <SearchField value={query} onChange={setQuery} placeholder={t.searchInventory} label={t.searchInventoryLabel} />
@@ -82,10 +102,13 @@ export function Inventory({ dataVersion }: NavProps) {
             {rows.map((i) => {
               const coverage = i.safetyStock === 0 ? 1 : Math.max(0, i.projected) / i.safetyStock;
               const accent = i.risk?.severity === 'critical' ? 'row-accent-critical' : i.risk?.severity === 'high' ? 'row-accent-high' : undefined;
+              const selected = charted !== undefined && keyOf(charted) === keyOf(i);
               return (
-                <tr key={`${i.sku}@${i.warehouse}`} className={accent}>
+                <tr key={keyOf(i)} className={[accent, selected ? 'row-selected' : ''].filter(Boolean).join(' ') || undefined}>
                   <td>
-                    <div className="mono cell-main">{i.sku}</div>
+                    <button type="button" className="link-btn mono cell-main" aria-pressed={selected} aria-label={t.design.chartButton(i.sku, i.warehouse)} onClick={() => setChartKey(keyOf(i))}>
+                      {i.sku}
+                    </button>
                     {i.productName && <div className="cell-sub">{i.productName}</div>}
                   </td>
                   <td>{i.warehouse}</td>

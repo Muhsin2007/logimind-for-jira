@@ -1,49 +1,21 @@
-import { useState } from 'react';
-import { call, errorMessage, useAsync, type RiskEvent } from '../api';
-import { EmptyState, ErrorState, KpiCard, Loading, Panel, SeverityBadge, SeverityDistribution } from '../components';
+import { call, useAsync, type RiskEvent } from '../api';
+import { ErrorState, KpiCard, Loading, Panel, SeverityBadge, SeverityDistribution } from '../components';
 import type { NavProps } from '../App';
 import { useI18n } from '../i18n';
 import { Icon } from '../icons';
 import { DailyBriefing } from './DailyBriefing';
+import { GettingStarted, Welcome } from './Onboarding';
+import { InboundTimelinePanel } from './Outlook';
 
 export function Dashboard({ dataVersion, onOpenShipment, onNavigate, onDataChanged }: NavProps) {
   const state = useAsync(() => call('getDashboard'), [dataVersion]);
-  const [loadingDemo, setLoadingDemo] = useState(false);
-  const [demoError, setDemoError] = useState<string | null>(null);
   const { t, fmt } = useI18n();
 
   if (state.status === 'loading') return <Loading label={t.loadingDashboard} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={state.reload} />;
   const { kpis, topRisks, recentImports, hasData, today } = state.data;
 
-  if (!hasData) {
-    const loadDemo = async () => {
-      setLoadingDemo(true);
-      setDemoError(null);
-      try {
-        await call('loadDemoData');
-        onDataChanged();
-      } catch (err) {
-        setDemoError(errorMessage(err));
-      } finally {
-        setLoadingDemo(false);
-      }
-    };
-    return (
-      <EmptyState title={t.noDataTitle}>
-        <p>{t.noDataText}</p>
-        <div className="row">
-          <button type="button" className="btn btn-primary" onClick={loadDemo} disabled={loadingDemo}>
-            {loadingDemo ? t.loadingDemo : t.loadDemo}
-          </button>
-          <button type="button" className="btn" onClick={() => onNavigate('import')}>
-            <Icon name="upload" /> {t.importCsv}
-          </button>
-        </div>
-        {demoError && <p role="alert" className="text-danger">{demoError}</p>}
-      </EmptyState>
-    );
-  }
+  if (!hasData) return <Welcome onNavigate={onNavigate} onDataChanged={onDataChanged} />;
 
   const openRisk = (r: RiskEvent) => (r.entityType === 'shipment' ? onOpenShipment(r.entityKey) : onNavigate('inventory'));
   const totalRisks = Object.values(kpis.risksBySeverity).reduce((a, b) => a + b, 0);
@@ -51,6 +23,7 @@ export function Dashboard({ dataVersion, onOpenShipment, onNavigate, onDataChang
 
   return (
     <div className="stack">
+      <GettingStarted onNavigate={onNavigate} />
       {urgent > 0 ? (
         <div className="attention attention-danger">
           <span className="attention-icon"><Icon name="alert" size={18} /></span>
@@ -145,6 +118,8 @@ export function Dashboard({ dataVersion, onOpenShipment, onNavigate, onDataChang
           )}
         </Panel>
       </div>
+
+      <InboundTimelinePanel dataVersion={dataVersion} onOpenShipment={onOpenShipment} />
 
       <DailyBriefing dataVersion={dataVersion} onOpenShipment={onOpenShipment} onOpenInventory={() => onNavigate('inventory')} onDataChanged={onDataChanged} />
 

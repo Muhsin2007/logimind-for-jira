@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { UiLocale } from './api';
 import { LOCALE_NAMES, useI18n } from './i18n';
+import { markVisited } from './onboarding';
 import { Icon, LogoMark, type IconName } from './icons';
 import { Copilot } from './views/Copilot';
 import { Dashboard } from './views/Dashboard';
@@ -56,6 +57,7 @@ export function App() {
   const selectTab = useCallback((next: Tab) => {
     setWhatIfShipmentId(null);
     setTab(next);
+    markVisited(next);
   }, []);
   const nav = useMemo<NavProps>(
     () => ({ dataVersion, onOpenShipment: setShipmentId, onNavigate: selectTab, onDataChanged, whatIfShipmentId }),
@@ -66,6 +68,7 @@ export function App() {
     setWhatIfShipmentId(id);
     setShipmentId(null);
     setTab('whatIf');
+    markVisited('whatIf');
     // The drawer's opener is gone with the old tab, so focus moves to the What-if tab.
     requestAnimationFrame(() => document.getElementById('tab-whatIf')?.focus());
   }, []);
