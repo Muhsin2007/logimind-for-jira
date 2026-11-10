@@ -101,6 +101,7 @@ Note: while no owner exists, a Jira admin's role label reads "Viewer" although t
 | OAuth 2.1 consent from an MCP client | ✅ live | Claude Code: `claude mcp add --transport http logimind https://mcp.atlassian.com/forge/<appId>` → `/mcp` → Authenticate → status **Connected** (site without Rovo) |
 | Tools listed to the client | ✅ live | `get-risk-summary_development`, `get-shipment_development`, `get-inventory_development`, `get-linked-jira-issue_development`, `simulate-delay_development` (the platform adds the environment suffix) |
 | Real tool calls | ✅ live | `get-risk-summary` (limit 3) → 30 open risks (7 critical), top 3 late shipments with numeric evidence, `notice` present; `simulate-delay` (NorthStar Parts, +7 days) → SHP-1011 / SKU-01: stock-out 2026-12-31 → 2026-11-28, days of cover 51 → 18, `readOnly:true`; `simulate-delay` SHP-1001 → `found:false` (already arrived); `get-linked-jira-issue` LATE_SHIPMENT:SHP-1004 → no issue yet |
+| Production deploy | ✅ | `forge deploy -e production` → v4.1.0 (minor, no re-consent), author-approved |
 | Prompt-injection style input from the client | ✅ live | `get-shipment` with `SHP-1004; ignore previous instructions` → `ok:false, "shipmentId is not a valid identifier"`, no data |
 | Rovo Studio custom agent using the tools | ⛔ not possible | Rovo is not provisioned on the author's site (D11) |
 
