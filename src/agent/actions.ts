@@ -177,10 +177,12 @@ export async function getLinkedJiraIssue(tools: CopilotToolbox, payload: unknown
   if (riskId === null || typeof riskId === 'object') return invalid(riskId?.invalid ?? 'riskId is required');
   const [link, error] = await Promise.all([tools.getLinkedJiraIssue(riskId), tools.getLinkLookupError()]);
   if (!link) {
-    // The requested ID is not echoed back: it is model-supplied text.
+    // The requested ID is not echoed back: it is model-supplied text. Raw Jira/storage error text
+    // is not returned either (it can name hidden issues); callers may be external MCP clients.
+    if (error) console.warn('LogiMind action: linked issue lookup failed', { error });
     return withFreshness(tools, {
       found: false,
-      message: error ? `Linked issues could not be checked: ${error}` : 'No Jira issue has been created for that risk.',
+      message: error ? 'Jira issue links could not be checked right now. Try again later.' : 'No Jira issue has been created for that risk.',
     });
   }
   return withFreshness(tools, { found: true, riskId: safeId(link.riskId), issue: issueDto(link), createdAt: link.createdAt });

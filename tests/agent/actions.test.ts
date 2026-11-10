@@ -128,6 +128,15 @@ describe('Rovo actions', () => {
     expect(JSON.stringify(out)).not.toContain('SECRET-1');
   });
 
+  it('does not pass raw Jira or storage error text to the caller (MCP clients are external)', async () => {
+    const tools = demoTools();
+    vi.spyOn(tools, 'getLinkedJiraIssue').mockResolvedValue(null);
+    vi.spyOn(tools, 'getLinkLookupError').mockResolvedValue("Jira error 400: An issue with key '10042' does not exist");
+    const out = await getLinkedJiraIssue(tools, { riskId: 'LATE_SHIPMENT:SHP-1004' });
+    expect(out).toMatchObject({ found: false, message: 'Jira issue links could not be checked right now. Try again later.' });
+    expect(JSON.stringify(out)).not.toContain('10042');
+  });
+
   it('strips zero-width and bidi characters from imported text', () => {
     expect(cleanText('Acme​‮evil⁦')).toBe('Acme evil');
   });
