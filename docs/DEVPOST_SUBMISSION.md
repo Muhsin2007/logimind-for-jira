@@ -21,6 +21,7 @@ Small importers and distributors run purchasing and operations work in Jira, but
 - **Owner and managers**: a Jira admin claims LogiMind and picks the people who may import data and change settings; everyone else can view.
 - **Days of cover and a what-if delay simulator**: when each SKU runs out, and what a supplier delay would do to it, live as you drag a slider.
 - **Charts that tell the story**: an inbound timeline (planned → expected arrival, late bars cross *today*), a stock outlook chart per SKU with arrivals and the stock-out date, and a *current plan vs. with the delay* chart in the simulator.
+- **Supplier reliability and a likely arrival date**: from the delivery history LogiMind grades each supplier (on-time rate, usual delay) and shows when an open shipment will probably arrive if the supplier is as late as usual — in the shipments table, the shipment drawer and as an *if late as usual* line on the stock chart.
 - **First-run onboarding**: a welcome screen with one-click demo data, then a short *Getting started* checklist.
 - **Rovo agent "LogiMind"** with five read-only actions so the same answers are available in Rovo chat.
 

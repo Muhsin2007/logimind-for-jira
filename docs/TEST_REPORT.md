@@ -129,6 +129,20 @@ Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High.
 
 Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High/Medium. Fixed after review: reservations in the stock series; stock-out mark at the exact crossing; overdue counted from the planned date when the ETA is earlier; Inventory table no longer waits for shipments; What-if chart window grows to the latest delayed arrival (max 90 days); SVG `aria-hidden` with a text summary; row keys via `JSON.stringify`. Also fixed: doubled full stop after RU dates in the chart summary.
 
+## Roadmap week 6: supplier reliability + arrival forecast (2026-11-11, dev v7.4.0)
+
+| Check | Status | Evidence |
+|---|---|---|
+| Full suite | ✅ | `npx vitest run`: **357 passed** (30 files); UI build OK; both `tsc --noEmit` clean; `forge lint` no issues |
+| Reliability (median, rounding, grades, cancelled ignored, open/late counts, sort, name matching by case/spaces, future actual dates ignored) | ✅ unit | `tests/domain/supplier-reliability.test.ts` |
+| Forecast (history shift, slipped ETA kept, overdue, passed date → null, too little history, on-time supplier, ETA vs plan basis) and the "late as usual" series (overdue left alone; demo SKU-01 Tashkent spends more days below safety) | ✅ unit | same file |
+| `getShipment` returns the supplier record and forecast | ✅ unit | `tests/services/logistics-service.test.ts` |
+| Visual check in a local preview (mocked bridge, demo data) | ✅ | Suppliers panel and filter, "likely" dates, drawer Forecast step and delivery record, stock chart dashed line; dashboard timeline unchanged |
+| Deploy to development | ✅ live | `forge deploy -e development` → v7.4.0 (minor) |
+| Production deploy | ⏳ | waits for the author's approval |
+
+Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High. Fixed after review (Medium): on-time suppliers were described as "not enough history"; "after the ETA" wording when only a plan exists; supplier names split by case/spaces; "late as usual" line could sit above today's for overdue shipments. Low fixed: future actual dates counted, stale supplier filter after re-import, table caption/`scope`, filter badge announced, RU wording, duplicate CSS rule. Also fixed: `.tl-label`/`.tl-note` styles from the dashboard timeline leaked into the drawer timeline.
+
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
 
