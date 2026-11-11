@@ -3,6 +3,7 @@ import { ev, num, numText, str, type Messages } from './en';
 import { loopRu } from './loop-ru';
 import { rolesRu } from './roles-ru';
 import { designRu } from './design-ru';
+import { supplierRu } from './supplier-ru';
 
 /** Russian plural form: 1 день, 2 дня, 5 дней (11–14 always take the "many" form). */
 export function plural(n: number, one: string, few: string, many: string): string {
@@ -544,4 +545,6 @@ export const ru: Messages = {
   roles: rolesRu,
   // Таймлайн, график запаса и онбординг
   design: designRu,
+  // Надёжность поставщиков и прогноз прибытия
+  supplier: supplierRu,
 };

@@ -98,18 +98,22 @@ const niceMax = (v: number) => {
 
 /**
  * Projected stock per day with the safety-stock line, arrivals and the stock-out date. With
- * `compare`, a second (dashed) line shows the same position in a what-if scenario. The summary
+ * `compare`, a second (dashed) line shows the same position in a what-if scenario or with
+ * suppliers as late as usual. The summary
  * sentence and the arrivals list carry the same facts as text.
  */
-export function StockChart({ series, stockOutDate, belowSafetyDate, compare, compareStockOutDate }: {
+export function StockChart({ series, stockOutDate, belowSafetyDate, compare, compareStockOutDate, compareKind = 'delay' }: {
   series: StockSeries;
   stockOutDate: IsoDate | null;
   belowSafetyDate: IsoDate | null;
   compare?: StockSeries;
   compareStockOutDate?: IsoDate | null;
+  /** What the dashed line means: a what-if delay, or suppliers being as late as usual. */
+  compareKind?: 'delay' | 'history';
 }) {
   const { t, fmt } = useI18n();
   const d = t.design;
+  const history = compareKind === 'history';
   const today = series.points[0].date;
   const all = [...series.points, ...(compare?.points ?? [])].map((p) => p.level);
   const top = niceMax(Math.max(series.safetyStock, ...all) * 1.1);
@@ -124,7 +128,7 @@ export function StockChart({ series, stockOutDate, belowSafetyDate, compare, com
   let summary = d.chartSummary(fmt.number(series.points[0].level), fmt.number(end.level), series.days, fmt.number(series.safetyStock));
   if (inWindow(stockOutDate)) summary += d.chartSummaryOut(fmt.date(stockOutDate));
   else if (inWindow(belowSafetyDate)) summary += d.chartSummaryBelow(fmt.date(belowSafetyDate));
-  if (compare && inWindow(compareStockOutDate)) summary += d.chartSummaryCompareOut(fmt.date(compareStockOutDate));
+  if (compare && inWindow(compareStockOutDate) && !(history && compareStockOutDate === stockOutDate)) summary += (history ? t.supplier.chartSummaryOut : d.chartSummaryCompareOut)(fmt.date(compareStockOutDate));
 
   return (
     <figure className="chart">
@@ -162,12 +166,13 @@ export function StockChart({ series, stockOutDate, belowSafetyDate, compare, com
         <p className="chart-summary">{summary}</p>
         <ul className="chart-legend" aria-label={d.legend}>
           <li><span className="lg-swatch lg-line" aria-hidden="true" />{compare ? d.chartTodayLine : d.chartLevel}</li>
-          {compare && <li><span className="lg-swatch lg-line-compare" aria-hidden="true" />{d.chartWithDelay}</li>}
+          {compare && <li><span className="lg-swatch lg-line-compare" aria-hidden="true" />{history ? t.supplier.chartLine : d.chartWithDelay}</li>}
           {series.safetyStock > 0 && <li><span className="lg-swatch lg-safety" aria-hidden="true" />{d.chartSafety}</li>}
           <li><span className="lg-swatch lg-arrival" aria-hidden="true" />{d.chartArrival}</li>
           <li><span className="lg-swatch lg-out" aria-hidden="true" />{d.chartStockOut}</li>
         </ul>
         {series.flat && <p className="footnote">{d.chartFlat}</p>}
+        {compare && history && <p className="footnote">{t.supplier.chartNote}</p>}
         {compare && <p className="footnote">{d.chartLostSales}</p>}
         <p className="sr-only">
           {d.chartArrivals}: {series.arrivals.length === 0 ? d.chartNoArrivals : series.arrivals.map((a) => `${fmt.date(a.date)} +${fmt.number(a.qty)}`).join(', ')}

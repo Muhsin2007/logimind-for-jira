@@ -3,6 +3,7 @@ import type { Formatters } from '../format';
 import { loopEn } from './loop-en';
 import { rolesEn } from './roles-en';
 import { designEn } from './design-en';
+import { supplierEn } from './supplier-en';
 
 /** A value from a risk's rule evidence (labels are fixed by the rule engine). */
 export const ev = (risk: RiskEvent, label: string): string | number | null => risk.evidence.find((e) => e.label === label)?.value ?? null;
@@ -537,6 +538,8 @@ export const en = {
   roles: rolesEn,
   // Inbound timeline, stock chart and onboarding
   design: designEn,
+  // Supplier reliability and arrival forecast
+  supplier: supplierEn,
 };
 
 export type Messages = typeof en;

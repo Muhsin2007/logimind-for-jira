@@ -81,8 +81,9 @@
 .drawer-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--s4) var(--s5); }
 .section-title { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-subtlest); margin-bottom: var(--s3); }
 
-.timeline { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); position: relative; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: relative; }
 .timeline::before { content: ''; position: absolute; left: 6px; right: 33%; top: 6px; height: 2px; background: var(--border); }
+.timeline:has(> li:nth-child(4))::before { right: 25%; }
 .tl-step { position: relative; display: flex; flex-direction: column; gap: 2px; padding-right: var(--s2); }
 .tl-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong); margin-bottom: var(--s2); position: relative; }
 .tl-done .tl-dot { background: var(--success); border-color: var(--success); }
@@ -239,7 +240,7 @@
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .risk-link { grid-template-columns: 1fr auto; }
   .risk-link .badge { grid-column: 1 / -1; }
-  .timeline { grid-template-columns: 1fr; gap: var(--s3); }
+  .timeline { grid-auto-flow: row; grid-template-columns: 1fr; gap: var(--s3); }
   .timeline::before { display: none; }
   .drawer-head, .drawer-body { padding-left: var(--s4); padding-right: var(--s4); }
 }
@@ -272,3 +273,4 @@ html:has(.sidebar), html:has(.sidebar) body { background: transparent; }
 .person { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; flex: none; object-fit: cover; }
 .avatar-initials { display: inline-flex; align-items: center; justify-content: center; background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-subtle); font-size: var(--fs-xs); font-weight: 600; }
+.forecast-sub { color: var(--text-warning); white-space: nowrap; }

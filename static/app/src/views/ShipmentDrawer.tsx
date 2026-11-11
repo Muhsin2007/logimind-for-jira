@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { COVER_HORIZON_DAYS } from '../../../../src/domain/cover';
 import { daysBetween, todayUtc } from '../../../../src/domain/dates';
 import { expectedArrival, isOpen } from '../../../../src/domain/risk-engine';
+import type { ArrivalForecast, SupplierReliability } from '../../../../src/domain/supplier-reliability';
 import { call, useAsync, type CoverProjection, type Shipment } from '../api';
 import { CoverValue, ErrorState, Facts, Loading, SeverityBadge, StatusBadge } from '../components';
 import { useI18n } from '../i18n';
@@ -19,8 +20,9 @@ function Section({ title, icon, children }: { title: string; icon: IconName; chi
 }
 
 /** Planned → latest ETA → received, with each date's distance from the plan; only dates in the data. */
-function Timeline({ shipment }: { shipment: Shipment }) {
+function Timeline({ shipment, forecast }: { shipment: Shipment; forecast: ArrivalForecast | null }) {
   const { t, fmt } = useI18n();
+  const s = t.supplier;
   const slip = shipment.eta ? daysBetween(shipment.plannedArrival, shipment.eta) : null;
   // An open shipment whose planned date has passed is overdue, whatever its ETA says.
   const overdue = isOpen(shipment) ? daysBetween(shipment.plannedArrival, todayUtc()) : 0;
@@ -39,6 +41,18 @@ function Timeline({ shipment }: { shipment: Shipment }) {
         <span className="tl-date">{shipment.eta ? fmt.date(shipment.eta) : '—'}</span>
         <span className="tl-note">{slip === null ? t.timelineNoEta : t.vsPlan(slip)}</span>
       </li>
+      {forecast && (
+        <li className={`tl-step ${forecast.basis === 'history' ? 'tl-late' : ''}`}>
+          <span className="tl-dot" aria-hidden="true" />
+          <span className="tl-label">{s.timelineForecast}</span>
+          <span className="tl-date">{fmt.date(forecast.date)}</span>
+          <span className="tl-note">
+            {forecast.basis === 'history'
+              ? s.forecastHistory(forecast.typicalDelayDays, forecast.shiftDays, forecast.from === 'plan')
+              : !forecast.adjusted ? s.forecastPlan : forecast.typicalDelayDays > 0 ? s.forecastKept : s.forecastOnTime}
+          </span>
+        </li>
+      )}
       <li className={`tl-step ${arrived === null ? '' : arrived > 0 ? 'tl-late' : 'tl-done'}`}>
         <span className="tl-dot" aria-hidden="true" />
         <span className="tl-label">{t.timelineActual}</span>
@@ -47,6 +61,13 @@ function Timeline({ shipment }: { shipment: Shipment }) {
       </li>
     </ol>
   );
+}
+
+function SupplierRecord({ record }: { record: SupplierReliability }) {
+  const { t, fmt } = useI18n();
+  const s = t.supplier;
+  if (record.grade === 'new' || record.onTimeRate === null) return <>{s.recordNew(record.deliveries)}</>;
+  return <>{s.record(s.grade[record.grade], fmt.percent(record.onTimeRate), record.onTime, record.deliveries, s.typical(record.typicalDelayDays))}</>;
 }
 
 export function ShipmentDrawer({ id, onClose, onSimulate }: { id: string; onClose: () => void; onSimulate: (id: string) => void }) {
@@ -159,12 +180,13 @@ export function ShipmentDrawer({ id, onClose, onSimulate }: { id: string; onClos
                     [t.factSupplier, data.shipment.supplier],
                     [t.factCarrier, data.shipment.carrier],
                     [t.factTracking, data.shipment.trackingRef && <span key="tr" className="mono">{data.shipment.trackingRef}</span>],
+                    [t.supplier.factRecord, data.supplier && <SupplierRecord key="rec" record={data.supplier} />],
                   ]}
                 />
               </Section>
 
               <Section title={t.secTimeline} icon="calendar">
-                <Timeline shipment={data.shipment} />
+                <Timeline shipment={data.shipment} forecast={data.forecast} />
               </Section>
 
               <Section title={t.secImpact} icon="warehouse">

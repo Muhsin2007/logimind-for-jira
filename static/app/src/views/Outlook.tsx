@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { buildPipelineIndex } from '../../../../src/domain/cover';
+import { buildPipelineIndex, coverFor } from '../../../../src/domain/cover';
 import { seriesFor } from '../../../../src/domain/stock-series';
+import { withForecastArrivals } from '../../../../src/domain/supplier-reliability';
 import { inboundTimeline } from '../../../../src/domain/timeline';
 import { call, useAsync, type InventoryRow, type IsoDate, type Shipment } from '../api';
 import { InboundTimelineChart, StockChart } from '../charts';
@@ -34,9 +35,23 @@ export function StockOutlookPanel({ item, shipments, today }: { item: InventoryR
   const { t } = useI18n();
   const d = t.design;
   const series = useMemo(() => seriesFor(item, buildPipelineIndex(shipments), today, CHART_DAYS), [item, shipments, today]);
+  // The same position if every supplier is as late as it usually is; shown only when it differs.
+  const usual = useMemo(() => {
+    const pipeline = buildPipelineIndex(withForecastArrivals(shipments, today));
+    const alt = seriesFor(item, pipeline, today, CHART_DAYS);
+    const same = alt.path.length === series.path.length && alt.path.every((p, i) => p.day === series.path[i].day && p.level === series.path[i].level);
+    return same ? null : { series: alt, stockOutDate: coverFor(item, pipeline, today).stockOutDate };
+  }, [item, shipments, today, series]);
   return (
     <Panel title={d.chartTitle(item.sku, item.warehouse)} icon="box" description={d.chartDesc} actions={<span className="badge badge-neutral">{d.chartDays(CHART_DAYS)}</span>}>
-      <StockChart series={series} stockOutDate={item.cover.stockOutDate} belowSafetyDate={item.cover.belowSafetyDate} />
+      <StockChart
+        series={series}
+        stockOutDate={item.cover.stockOutDate}
+        belowSafetyDate={item.cover.belowSafetyDate}
+        compare={usual?.series}
+        compareStockOutDate={usual?.stockOutDate}
+        compareKind="history"
+      />
     </Panel>
   );
 }
