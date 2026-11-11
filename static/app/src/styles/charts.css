@@ -15,7 +15,8 @@
 }
 .tl-row:hover { background: var(--hover); }
 .tl-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.tl-label { display: flex; flex-direction: column; min-width: 0; padding-left: var(--s2); }
+/* Scoped to .tl: the shipment drawer's delivery timeline reuses .tl-label and .tl-note. */
+.tl .tl-label { display: flex; flex-direction: column; min-width: 0; padding-left: var(--s2); }
 .tl-id { font-size: var(--fs-md); font-weight: 600; }
 .tl-sub { font-size: var(--fs-sm); color: var(--text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-track { position: relative; height: 30px; }
@@ -30,7 +31,7 @@
 .tl-mark { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; }
 .tl-mark-planned { background: var(--surface); border: 2px solid var(--text-subtlest); }
 .tl-mark-expected { border: 2px solid var(--surface); }
-.tl-note { position: absolute; top: 50%; margin: -9px 0 0 10px; font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+.tl .tl-note { position: absolute; top: 50%; margin: -9px 0 0 10px; font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
 .tl-note-left { transform: translateX(calc(-100% - 20px)); }
 .tl-note-slip { color: var(--text-warning); }
 .tl-note-overdue { color: var(--text-danger); }
