@@ -1,4 +1,5 @@
 import { locationKey } from '../domain/risk-engine';
+import { forecastArrival, reliabilityIndex, supplierKey, supplierReliability } from '../domain/supplier-reliability';
 import { delayCandidates, simulateDelay, type DelayScenario, type WhatIfResult } from '../domain/what-if';
 import type { ImportBatch, IsoDate, RiskEvent, RiskType, Severity } from '../domain/types';
 import type { InventoryRow, IssueLinksData, IssueLinkView, ShipmentDetail, ShipmentRow } from '../shared/api';
@@ -80,16 +81,19 @@ export class ServiceToolbox implements CopilotToolbox {
   }
 
   async getShipment(shipmentId: string): Promise<ShipmentDetail | null> {
-    const { shipments, items, risks } = await this.overview();
+    const { today, shipments, items, risks } = await this.overview();
     const wanted = shipmentId.trim().toUpperCase();
     const row = shipments.find((s) => s.id.toUpperCase() === wanted);
     if (!row) return null;
     const { riskIds: _riskIds, topSeverity: _top, ...shipment } = row;
     const loc = locationKey(shipment.sku, shipment.warehouse);
+    const reliability = reliabilityIndex(supplierReliability(shipments, today));
     return {
       shipment,
       risks: risks.filter((r) => r.entityType === 'shipment' && r.entityKey === shipment.id),
       inventory: items.find((i) => locationKey(i.sku, i.warehouse) === loc) ?? null,
+      supplier: reliability.get(supplierKey(shipment.supplier)) ?? null,
+      forecast: forecastArrival(shipment, reliability, today),
     };
   }
 

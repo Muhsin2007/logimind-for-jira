@@ -53,6 +53,25 @@ const SHIPMENTS: Row[] = [
   ['SHP-1028', 'PO-528', 'MetroParts', 'SKU-07', 20, 1, null, null, 'in_transit', 'Tashkent', 'Caspian Freight'],
   ['SHP-1029', 'PO-529', 'Altai Components', 'SKU-08', 130, -10, -10, -12, 'delivered', 'Tashkent', 'Steppe Line'],
   ['SHP-1030', 'PO-530', 'Silk Road Motors', 'SKU-04', 140, 4, 4, null, 'confirmed', 'Samarkand', 'SilkWay Cargo'],
+  // Delivery history, so supplier reliability tells a story: NorthStar Parts is usually about a
+  // week late, Altai Components a few days, EastLine and Silk Road mostly on time, MetroParts always.
+  ['SHP-0901', 'PO-401', 'NorthStar Parts', 'SKU-01', 110, -60, -52, -52, 'delivered', 'Tashkent', 'Caspian Freight'],
+  ['SHP-0902', 'PO-402', 'NorthStar Parts', 'SKU-05', 70, -48, -39, -39, 'delivered', 'Tashkent', 'Caspian Freight'],
+  ['SHP-0903', 'PO-403', 'NorthStar Parts', 'SKU-02', 90, -40, -33, -33, 'delivered', 'Samarkand', 'Caspian Freight'],
+  ['SHP-0904', 'PO-404', 'NorthStar Parts', 'SKU-07', 40, -32, -22, -22, 'delivered', 'Tashkent', 'Caspian Freight'],
+  ['SHP-0905', 'PO-405', 'EastLine Supply', 'SKU-02', 85, -58, -58, -58, 'delivered', 'Tashkent', 'SilkWay Cargo'],
+  ['SHP-0906', 'PO-406', 'EastLine Supply', 'SKU-08', 100, -45, -45, -45, 'delivered', 'Samarkand', 'SilkWay Cargo'],
+  ['SHP-0907', 'PO-407', 'EastLine Supply', 'SKU-10', 300, -36, -36, -36, 'delivered', 'Samarkand', 'SilkWay Cargo'],
+  ['SHP-0908', 'PO-408', 'EastLine Supply', 'SKU-01', 60, -24, -24, -24, 'delivered', 'Tashkent', 'SilkWay Cargo'],
+  ['SHP-0909', 'PO-409', 'MetroParts', 'SKU-03', 190, -55, -55, -55, 'delivered', 'Tashkent', 'Caspian Freight'],
+  ['SHP-0910', 'PO-410', 'MetroParts', 'SKU-08', 80, -44, -44, -44, 'delivered', 'Tashkent', 'Caspian Freight'],
+  ['SHP-0911', 'PO-411', 'MetroParts', 'SKU-09', 50, -34, -35, -35, 'delivered', 'Tashkent', 'Caspian Freight'],
+  ['SHP-0912', 'PO-412', 'MetroParts', 'SKU-05', 45, -22, -22, -22, 'delivered', 'Samarkand', 'Steppe Line'],
+  ['SHP-0913', 'PO-413', 'Altai Components', 'SKU-04', 140, -50, -47, -47, 'delivered', 'Samarkand', 'Steppe Line'],
+  ['SHP-0914', 'PO-414', 'Altai Components', 'SKU-03', 200, -38, -33, -33, 'delivered', 'Samarkand', 'Steppe Line'],
+  ['SHP-0915', 'PO-415', 'Silk Road Motors', 'SKU-06', 280, -52, -52, -52, 'delivered', 'Tashkent', 'SilkWay Cargo'],
+  ['SHP-0916', 'PO-416', 'Silk Road Motors', 'SKU-10', 450, -41, -41, -41, 'delivered', 'Tashkent', 'SilkWay Cargo'],
+  ['SHP-0917', 'PO-417', 'Silk Road Motors', 'SKU-04', 150, -28, -28, -28, 'delivered', 'Samarkand', 'SilkWay Cargo'],
 ];
 
 // [sku, warehouse, onHand, reserved, safetyStock, unitCost, dailyUsage]

@@ -5,6 +5,7 @@ import { applyMapping, previewColumns, validateMapping } from '../domain/column-
 import { importCsv } from '../domain/importer';
 import { buildPipelineIndex, coverFor, type PipelineIndex } from '../domain/cover';
 import { computeKpis } from '../domain/kpis';
+import { forecastArrival, reliabilityIndex, supplierKey, supplierReliability } from '../domain/supplier-reliability';
 import { buildInboundIndex, evaluateRisks, inventoryEntityKey, stockPosition, type InboundIndex } from '../domain/risk-engine';
 import { SEVERITIES, type ImportBatch, type ImportKind, type InventoryItem, type IsoDate, type RiskEvent, type Shipment } from '../domain/types';
 import type { DashboardData, ImportOutcome, InventoryRow, ShipmentDetail, ShipmentRow } from '../shared/api';
@@ -75,10 +76,13 @@ export class LogisticsService {
     const item = snap.inventory.find(
       (i) => i.sku.toUpperCase() === shipment.sku.toUpperCase() && i.warehouse.trim().toLowerCase() === shipment.warehouse.trim().toLowerCase(),
     );
+    const reliability = reliabilityIndex(supplierReliability(snap.shipments, snap.today));
     return {
       shipment,
       risks: snap.risksByEntity.get(`shipment:${id}`) ?? [],
       inventory: item ? toInventoryRow(item, snap) : null,
+      supplier: reliability.get(supplierKey(shipment.supplier)) ?? null,
+      forecast: forecastArrival(shipment, reliability, snap.today),
     };
   }
 

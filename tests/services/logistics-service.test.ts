@@ -104,6 +104,17 @@ describe('LogisticsService reads', () => {
     expect(detail?.inventory).toBeNull();
   });
 
+  it("adds the supplier's delivery record and the arrival forecast from that history", async () => {
+    const past = (id: string, planned: string, actual: string): Shipment => ({ ...late, id, plannedArrival: planned, eta: actual, actualArrival: actual, status: 'delivered' });
+    const history = [past('H1', '2026-09-01', '2026-09-06'), past('H2', '2026-09-10', '2026-09-15'), past('H3', '2026-09-20', '2026-09-25')];
+    const coming: Shipment = { ...late, id: 'SHP-10', plannedArrival: '2026-11-05', eta: '2026-11-06' };
+    const service = new LogisticsService(mockRepo([...history, coming, late]), () => NOW);
+    const detail = await service.getShipment('SHP-10');
+    expect(detail?.supplier).toMatchObject({ supplier: 'Acme', deliveries: 3, onTime: 0, typicalDelayDays: 5, grade: 'unreliable', openShipments: 2 });
+    expect(detail?.forecast).toEqual({ date: '2026-11-10', basis: 'history', shiftDays: 4, typicalDelayDays: 5, adjusted: true, from: 'eta' });
+    expect((await service.getShipment('H1'))?.forecast).toBeNull();
+  });
+
   it('annotates shipments with their highest risk severity', async () => {
     const { shipments } = await new LogisticsService(mockRepo([late]), () => NOW).listShipments();
     expect(shipments[0]).toMatchObject({ topSeverity: 'critical', riskIds: ['LATE_SHIPMENT:SHP-9'] });
@@ -150,7 +161,7 @@ describe('LogisticsService.loadDemoData', () => {
     const out = await new LogisticsService(repo, () => NOW).loadDemoData(null);
     expect(repo.withWriteLock).toHaveBeenCalledTimes(1);
     expect(out.every((o) => o.ok && o.batch.rowsRejected === 0)).toBe(true);
-    expect(repo.replaceShipments.mock.calls[0][0]).toHaveLength(30);
+    expect(repo.replaceShipments.mock.calls[0][0]).toHaveLength(47);
     expect(repo.replaceInventory.mock.calls[0][0]).toHaveLength(12);
   });
 });

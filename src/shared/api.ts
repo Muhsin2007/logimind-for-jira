@@ -6,6 +6,7 @@ import type { FieldSpec } from '../domain/column-mapping';
 import type { CoverProjection } from '../domain/cover';
 import type { RiskRef } from '../domain/risk-diff';
 import type { Access, Role, RoleAction, RoleErrorCode } from '../domain/roles';
+import type { ArrivalForecast, SupplierReliability } from '../domain/supplier-reliability';
 import type {
   ImportBatch,
   ImportKind,
@@ -21,7 +22,7 @@ import type {
   Shipment,
 } from '../domain/types';
 
-export type { RiskRef };
+export type { ArrivalForecast, RiskRef, SupplierReliability };
 export type { CoverProjection, FieldSpec, ImportBatch, ImportKind, InventoryItem, IssueLink, IssueStatus, IsoDate, JiraConfig, Kpis, RiskEvent, RowError, Severity, Shipment };
 
 /** UI language chosen by the person; English is the default. */
@@ -56,6 +57,10 @@ export interface ShipmentDetail {
   risks: RiskEvent[];
   /** Stock position for the shipment's SKU at its destination warehouse, if tracked. */
   inventory: InventoryRow | null;
+  /** The supplier's delivery record from the shipments file. */
+  supplier: SupplierReliability | null;
+  /** Likely arrival given the supplier's usual delay; null when closed or the date is unknown. */
+  forecast: ArrivalForecast | null;
 }
 
 export interface ImportRequest {
