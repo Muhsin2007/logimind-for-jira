@@ -139,7 +139,7 @@ Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High/Medium. F
 | `getShipment` returns the supplier record and forecast | ✅ unit | `tests/services/logistics-service.test.ts` |
 | Visual check in a local preview (mocked bridge, demo data) | ✅ | Suppliers panel and filter, "likely" dates, drawer Forecast step and delivery record, stock chart dashed line; dashboard timeline unchanged |
 | Deploy to development | ✅ live | `forge deploy -e development` → v7.4.0 (minor) |
-| Production deploy | ⏳ | waits for the author's approval |
+| Production deploy | ✅ | `forge deploy -e production` → v4.3.0 (minor, no re-consent), author-approved 2026-11-11 |
 
 Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High. Fixed after review (Medium): on-time suppliers were described as "not enough history"; "after the ETA" wording when only a plan exists; supplier names split by case/spaces; "late as usual" line could sit above today's for overdue shipments. Low fixed: future actual dates counted, stale supplier filter after re-import, table caption/`scope`, filter badge announced, RU wording, duplicate CSS rule. Also fixed: `.tl-label`/`.tl-note` styles from the dashboard timeline leaked into the drawer timeline.
 
