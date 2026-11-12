@@ -144,6 +144,26 @@ Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High/Medium. F
 
 Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High. Fixed after review (Medium): on-time suppliers were described as "not enough history"; "after the ETA" wording when only a plan exists; supplier names split by case/spaces; "late as usual" line could sit above today's for overdue shipments. Low fixed: future actual dates counted, stale supplier filter after re-import, table caption/`scope`, filter badge announced, RU wording, duplicate CSS rule. Also fixed: `.tl-label`/`.tl-note` styles from the dashboard timeline leaked into the drawer timeline.
 
+## Roadmap week 6: full QA + security follow-ups (2026-11-12, dev v7.7.0)
+
+| Check | Status | Evidence |
+|---|---|---|
+| Full suite | ✅ | `npx vitest run`: **371 passed** (30 files); UI build OK; both `tsc --noEmit` clean; `forge lint` no issues |
+| Rovo/MCP caller: account ID logged, calls without platform account context refused (an account ID in the payload is not trusted) | ✅ unit + live | `tests/agent/actions.test.ts`; dev logs show `{action, accountId: <masked>, source: 'principal'}` for `get-risk-summary` and `get-linked-jira-issue` called over MCP |
+| A hidden or deleted issue does not fail a 50-ID status search (400 → chunk is halved, own request budget per chunk, no throw when used up) | ✅ unit | `tests/jira/forge-adapters.test.ts` (200 rejected IDs; good chunk survives a bad one) |
+| `listIssueLinks` names only issues the viewer can see; others show as "an issue exists" (hidden) or "Jira could not be checked" (unknown) | ✅ unit | `tests/services/issue-service.test.ts`, `tests/agent/actions.test.ts`, `tests/copilot/rule-based-copilot.test.ts` |
+| Daily briefing withholds issue keys the viewer cannot see (`redactRun`) | ✅ unit | `tests/services/daily-check-service.test.ts` |
+| A user who gets 404 for a linked issue cannot replace its link while the app still finds it (Jira also answers 404 for no permission) | ✅ unit | `tests/services/issue-service.test.ts` |
+| Role texts: "only Jira admins" replaced by owner / managers / viewers | ✅ | README, docs, `ColumnMapping.tsx` |
+| Deploy to development | ✅ live | `forge deploy -e development` → v7.6.0, then v7.7.0 with the 404 re-check below (minor, no new scopes); Risks tab reloaded on v7.7.0: 33 risks |
+| MCP live (Claude Code → dev) | ✅ live | `get-risk-summary`: 33 open risks (11 critical, 8 high, 13 medium, 1 low); `get-linked-jira-issue LATE_SHIPMENT:SHP-1004` → SCRUM-7, status "К выполнению" |
+| UI live on the dev site (owner account) | ✅ live | Dashboard (KPIs, inbound timeline, daily briefing, recent imports); Shipments (supplier reliability panel, table, SHP-1004 drawer with timeline, stock impact and SCRUM-7 link); Inventory (stock chart); What-if (7-day delay scenario); Risk Center (33 risks, SCRUM-7 on SHP-1004); Copilot (AI answer with cited facts and next steps); Import & Settings (import wizard, automation, Roles panel: owner, no managers); EN/RU switch |
+| Production deploy | ⏸ | Not done — waits for the author's approval |
+
+Reviews (ecc typescript-reviewer, security-reviewer) after the fixes: no Critical/High open. Fixed after review — High: the daily briefing showed issue keys without checking the viewer's access (now redacted per viewer). Medium: the caller's account ID could come from the payload (now only `context.principal`); a user's 404 (deleted *or* no permission) let them overwrite another person's link (now re-checked as the app); a failed status check made issues look hidden (now "could not be checked"); a used-up search budget failed the whole list (now per chunk, the rest shown as not visible); checks of just-created issues capped at 5 links younger than 10 minutes.
+
+Open (documented limitations): no per-user rate limit on resolvers; AI answers go to the Forge LLM (Atlassian-hosted). Possible improvement: `POST /rest/api/3/issue/bulkfetch` instead of JQL `id in (...)`.
+
 ## Defect found and fixed during QA
 - **Shifted-column noise (importer):** a row with an unquoted comma (e.g. `Acme, Inc`) reported the column-count error *plus* three misleading field errors. Now only the cause is reported. Pinned by `fixtures.test.ts` (line 8).
 
@@ -152,4 +172,4 @@ Reviews (ecc typescript-reviewer, security-reviewer): no Critical/High. Fixed af
 1. **CSV upload with errors** — Import & Settings → choose `tests/fixtures/shipments-with-errors.csv`. Expected: "2 of 9 shipments rows imported, 7 rejected", with errors on lines 3 (supplier), 4 (planned_arrival), 5 (qty), 6 (status), 7 (duplicate QA-001), 8 (column count), 9 (actual_arrival). *This replaces the shipment data — click **Load demo data** afterwards to restore it.*
 2. **Wrong file** — upload `tests/fixtures/not-a-logistics-file.csv`. Expected: "File was not imported. Unrecognised header…", data unchanged.
 3. **Phone width** — open LogiMind in Jira on a phone (or a narrow window). Expected: tabs scroll horizontally, KPI tiles stack, tables scroll inside their panel, the shipment drawer fills the width.
-4. **Non-admin** *(optional, needs a second account)* — Import & Settings shows the "Only Jira administrators…" note and disabled buttons; Copilot and Risk Center still work.
+4. **Viewer** *(optional, needs a second account that is neither the LogiMind owner nor a manager)* — Import & Settings shows the "Only the LogiMind owner and managers…" note and disabled buttons; the Roles panel shows the person as Viewer; Copilot and Risk Center still work. Then, as the owner, add that account as a manager (Roles → Add manager): the buttons become active for it.
