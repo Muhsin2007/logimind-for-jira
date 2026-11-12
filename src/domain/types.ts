@@ -88,7 +88,7 @@ export interface ImportBatch {
   errors: RowError[];
 }
 
-/** Where "Create Jira issue" puts new issues; chosen by a Jira administrator. */
+/** Where "Create Jira issue" puts new issues; chosen by the LogiMind owner or a manager. */
 export interface JiraConfig {
   projectKey: string;
   projectName: string;

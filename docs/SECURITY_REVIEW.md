@@ -6,7 +6,7 @@ Last updated: 2026-11-03 (Roadmap week 1, Forge LLM). Reviewer: `ecc:security-re
 - Any Jira user who can open the LogiMind global page can call its resolvers.
 - Imported CSV content is untrusted and stored in app-level Forge KVS, shared across the site.
 - Jira issue creation (`asUser`) and a Rovo agent read this data, so CSV text reaches an LLM.
-- Since week 1 the app itself calls Atlassian-hosted Forge LLMs (`llm` module): uploaded headers and three sample rows (column mapping, admins only) and read-only tool results (Copilot, any page viewer). The model has no write tools, and its output is shown as plain React text.
+- Since week 1 the app itself calls Atlassian-hosted Forge LLMs (`llm` module): uploaded headers and three sample rows (column mapping, LogiMind owner and managers only) and read-only tool results (Copilot, any page viewer). The model has no write tools, and its output is shown as plain React text.
 
 ## Findings and status
 

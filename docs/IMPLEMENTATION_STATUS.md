@@ -104,7 +104,7 @@ Last updated: 2026-11-03
 ## Phase 3 — Jira integration
 
 **Built**
-- Settings (admin only): target project + issue type, validated against the admin's Jira access; only standard-level types (no Epics/sub-tasks); localized Task default (`Task|Задача|vazifa`).
+- Settings (LogiMind owner and managers): target project + issue type, validated against that person's Jira access; only standard-level types (no Epics/sub-tasks); localized Task default (`Task|Задача|vazifa`).
 - "Create Jira issue" on Risk Center cards and in the shipment drawer, with an inline confirmation naming the project. Created **as the clicking user** (`POST /rest/api/3/issue`), so Jira's own create permission applies.
 - Issue content from a fixed ADF template (no markup from CSV): `[Severity] risk title`, evidence list, risk ID, rule version; labels `logimind`, `logimind-<risk-type>`, `logimind-risk-<hash>` (per-risk, searchable).
 - Duplicate prevention: token-owned per-risk KVS lock + one link record per risk; existing issue (visible or hidden) blocks a new one; re-create only if the linked issue was deleted (404). Link save retried 3×; on failure the user gets the created key instead of a silent orphan.

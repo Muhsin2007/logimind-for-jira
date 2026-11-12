@@ -18,7 +18,7 @@ Both Custom UI modules use one bundle (`static/app/build`); `main.tsx` picks the
 ## Layers (`src/`)
 
 ```
-index.ts            resolvers + agent handlers: input checks, admin guard, wiring
+index.ts            resolvers + agent handlers: input checks, role guard (owner / manager), caller check for agent and MCP calls, wiring
 agent/actions.ts    Rovo actions → trimmed DTOs, CSV text isolated under importedText
 copilot/            CopilotToolbox (read-only, one snapshot per request), LlmCopilot (tool calling + evidence check), RuleBasedCopilot (fallback), recommendations
 ai/column-mapper.ts name match first, then Forge LLM proposes a header mapping (validated field by field)
@@ -27,7 +27,7 @@ services/           LogisticsService (import, views), IssueService (Jira issues,
 domain/             pure: CSV parser, importer/validation, risk engine, KPIs, demo data, issue template
 storage/            ports + Forge KVS adapters (base64url keys, batched writes, rollback, token-owned locks)
 jira/               JiraGateway port + Forge adapter (requestJira asUser, error mapping)
-auth/access.ts      Jira ADMINISTER check via /rest/api/3/mypermissions (asUser)
+auth/access.ts      Jira ADMINISTER check via /rest/api/3/mypermissions (asUser): who may claim or take over ownership
 shared/api.ts       resolver contract shared with the UI (types only)
 ```
 
@@ -49,9 +49,9 @@ Risks are **not stored**: they are recomputed deterministically from the data on
 
 ## Key flows
 
-- **Import** (admin): parse → validate per row → write new keys (bounded-parallel batches) → delete stale keys; on failure, roll back added keys. Serialised by a write lock.
+- **Import** (owner / manager): parse → validate per row → write new keys (bounded-parallel batches) → delete stale keys; on failure, roll back added keys. Serialised by a write lock.
 - **Create issue** (any user, Jira permission applies): config + active risk → per-risk lock → existing link check (`exists`/`hidden`/`missing`) → `POST /rest/api/3/issue` as user → save link (retried).
 - **Status**: `POST /rest/api/3/search/jql` with `id in (…)` as the viewer → current key + status.
-- **Import with mapping** (admin): header not recognised → name match, else Forge LLM proposes a mapping from headers + 3 cleaned sample rows → admin confirms/edits → only the header line is rewritten → normal validation.
+- **Import with mapping** (owner / manager): header not recognised → name match, else Forge LLM proposes a mapping from headers + 3 cleaned sample rows → the owner or manager confirms/edits → only the header line is rewritten → normal validation.
 - **AI Copilot**: one data snapshot per request → Forge LLM calls read-only tools (≤ 4 model calls, 800 output tokens each) → `submit_answer` → every ID/number/date checked against tool results (one correction round) → cited answer, or the rule-based answer with the reason.
 - **Rovo agent**: one data snapshot per request → read-only tools → cited, structured answer.

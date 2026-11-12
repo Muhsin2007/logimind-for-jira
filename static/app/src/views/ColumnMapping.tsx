@@ -40,7 +40,7 @@ interface Props {
 }
 
 /**
- * Lets an administrator check and edit a proposed column mapping before importing. Only
+ * Lets the LogiMind owner or a manager check and edit a proposed column mapping before importing. Only
  * column names change; every row is still validated by the importer afterwards.
  */
 export function ColumnMapping({ filename, proposal, busy, onConfirm, onCancel }: Props) {

@@ -12,7 +12,7 @@ Small importers and distributors run purchasing and operations work in Jira, but
 
 ## What it does
 - **Validated import** of shipment and inventory CSVs (or rows pasted from Excel): every rejected row is listed with its line and reason; nothing is used silently.
-- **AI column mapping**: a supplier export with its own column names is mapped by Claude (Forge LLM); the admin confirms, values are never changed, and every row is still validated.
+- **AI column mapping**: a supplier export with its own column names is mapped by Claude (Forge LLM); the owner or a manager confirms, values are never changed, and every row is still validated.
 - **Transparent risk engine**: late shipments, ETA slips, missing ETAs and stock-outs, each with its evidence and rule version — a rule-based score, explicitly not a prediction.
 - **Dashboard, Shipments, Inventory and Risk Center** inside Jira, in Jira's own light/dark theme.
 - **One-click Jira issues** from any risk, created as the user, one per risk, with live status and a LogiMind panel on the issue showing the source shipment.
