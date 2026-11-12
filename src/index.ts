@@ -1,7 +1,7 @@
 import Resolver from '@forge/resolver';
 import { ColumnMapper } from './ai/column-mapper';
 import { FollowUpDrafter } from './ai/follow-up-drafter';
-import { getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from './agent/actions';
+import { asCaller, getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, simulateDelay } from './agent/actions';
 import { ForbiddenError } from './auth/access';
 import { LlmCopilot } from './copilot/llm-copilot';
 import { MAX_QUESTION } from './copilot/rule-based-copilot';
@@ -12,10 +12,10 @@ import { RoleError } from './domain/roles';
 import { ForgeJiraGateway } from './jira/forge-jira-gateway';
 import { ForgeUserDirectory } from './jira/forge-user-directory';
 import { ForgeLlm } from './llm/forge-llm';
-import type { RoleOutcome } from './shared/api';
+import type { CheckRun, RoleOutcome } from './shared/api';
 import { RoleService } from './services/role-service';
 import { KvsRoleStore } from './storage/kvs-role-store';
-import { DailyCheckService } from './services/daily-check-service';
+import { DailyCheckService, namesIssues, redactRun } from './services/daily-check-service';
 import { IssueService, ISSUE_ID } from './services/issue-service';
 import { LogisticsService } from './services/logistics-service';
 import { CheckBusyError } from './storage/check-store';
@@ -25,10 +25,11 @@ import { KvsLogisticsRepository } from './storage/kvs-repository';
 
 const logistics = new LogisticsService(new KvsLogisticsRepository());
 const issueLinks = new KvsIssueLinkRepository();
-const issues = new IssueService(logistics, issueLinks, new ForgeJiraGateway());
 // Background work (the daily check) has no user, so it calls Jira as the app: the app's user needs
 // Browse projects, Create issues and Add comments in the configured project.
 const appJira = new ForgeJiraGateway('app');
+// The app gateway only re-checks a linked issue the user got a 404 for (hidden vs. really deleted).
+const issues = new IssueService(logistics, issueLinks, new ForgeJiraGateway(), () => new Date(), appJira);
 const dailyCheck = new DailyCheckService(logistics, new KvsCheckStore(), issueLinks, new IssueService(logistics, issueLinks, appJira), appJira);
 const llm = new ForgeLlm();
 const roles = new RoleService(new KvsRoleStore(), new ForgeUserDirectory());
@@ -172,11 +173,19 @@ resolver.define('saveJiraConfig', async ({ payload, context }) => {
 });
 
 // Daily check: the briefing is readable by everyone; running it and the auto-create switch need the data-manager role.
-resolver.define('getDailyBriefing', () => dailyCheck.getBriefing());
+/** Issue keys in a check run are kept only for issues the viewer can see in Jira. */
+async function forViewer(run: CheckRun) {
+  return redactRun(run, namesIssues(run) ? (await issues.listLinks()).links : []);
+}
+
+resolver.define('getDailyBriefing', async () => {
+  const { lastRun, autoCreate } = await dailyCheck.getBriefing();
+  return { autoCreate, lastRun: lastRun ? await forViewer(lastRun) : null };
+});
 resolver.define('runDailyCheck', async ({ context }) => {
   await roles.requireDataManager(accountOf(context));
   try {
-    return { ok: true as const, run: await dailyCheck.run('manual') };
+    return { ok: true as const, run: await forViewer(await dailyCheck.run('manual')) };
   } catch (err) {
     if (err instanceof CheckBusyError) return { ok: false as const, code: 'BUSY' as const, message: err.message };
     throw err;
@@ -218,10 +227,12 @@ export async function runDailyCheck(): Promise<void> {
   }
 }
 
-// Rovo agent actions (read-only). Each request gets its own toolbox: one consistent data read.
+// Rovo agent actions and `rovo:mcp` tools (read-only, same handlers). Forge calls each with
+// (payload, context); a call without a user account is refused, and the caller's account ID is logged.
+// Each request gets its own toolbox: one consistent data read.
 const toolbox = () => new ServiceToolbox(logistics, issues);
-export const agentRiskSummary = (payload: unknown) => safely(() => getRiskSummary(toolbox(), payload));
-export const agentShipment = (payload: unknown) => safely(() => getShipment(toolbox(), payload));
-export const agentInventory = (payload: unknown) => safely(() => getInventory(toolbox(), payload));
-export const agentLinkedIssue = (payload: unknown) => safely(() => getLinkedJiraIssue(toolbox(), payload));
-export const agentSimulateDelay = (payload: unknown) => safely(() => simulateDelay(toolbox(), payload));
+export const agentRiskSummary = (payload: unknown, context?: unknown) => asCaller('get-risk-summary', payload, context, () => getRiskSummary(toolbox(), payload));
+export const agentShipment = (payload: unknown, context?: unknown) => asCaller('get-shipment', payload, context, () => getShipment(toolbox(), payload));
+export const agentInventory = (payload: unknown, context?: unknown) => asCaller('get-inventory', payload, context, () => getInventory(toolbox(), payload));
+export const agentLinkedIssue = (payload: unknown, context?: unknown) => asCaller('get-linked-jira-issue', payload, context, () => getLinkedJiraIssue(toolbox(), payload));
+export const agentSimulateDelay = (payload: unknown, context?: unknown) => asCaller('simulate-delay', payload, context, () => simulateDelay(toolbox(), payload));

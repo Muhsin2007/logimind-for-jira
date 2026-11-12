@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { call, errorMessage, useAsync, type CheckRun, type RiskRef } from '../api';
+import { call, errorMessage, useAsync, type BriefingRun, type RiskRef } from '../api';
 import { Callout, ErrorState, Loading, Panel, SeverityBadge } from '../components';
 import { useI18n } from '../i18n';
 import { Icon } from '../icons';
@@ -7,7 +7,7 @@ import { Icon } from '../icons';
 /** Turns a run's auto-create error into the person's language where the code is known. */
 export function useAutoCreateError() {
   const { t } = useI18n();
-  return (error: CheckRun['autoCreate']['error']): string | null => {
+  return (error: BriefingRun['autoCreate']['error']): string | null => {
     if (!error) return null;
     if (error.code === 'FORBIDDEN' || error.code === 'AUTH') return t.loop.autoForbidden;
     if (error.code === 'NOT_CONFIGURED') return t.loop.autoNotConfigured;
@@ -16,7 +16,7 @@ export function useAutoCreateError() {
 }
 
 /** The last check's problems; past information, so a note rather than an alert. */
-export function RunProblems({ run, canManage }: { run: CheckRun; canManage: boolean }) {
+export function RunProblems({ run, canManage }: { run: BriefingRun; canManage: boolean }) {
   const { t } = useI18n();
   const autoMessage = useAutoCreateError()(run.autoCreate.error);
   if (!autoMessage && !run.comments.error) return null;
@@ -126,7 +126,8 @@ export function DailyBriefing({ dataVersion, onOpenShipment, onOpenInventory, on
             )}
             {run.autoCreate.created.length > 0 && (
               <p className="small">
-                <strong>{t.loop.issuesCreated}:</strong> <span className="mono">{run.autoCreate.created.map((c) => c.issueKey).join(', ')}</span>
+                <strong>{t.loop.issuesCreated}:</strong> <span className="mono">{run.autoCreate.created.flatMap((c) => (c.issueKey ? [c.issueKey] : [])).join(', ')}</span>
+                {run.autoCreate.created.some((c) => !c.issueKey) && <span className="muted"> {t.loop.hiddenIssues(run.autoCreate.created.filter((c) => !c.issueKey).length)}</span>}
               </p>
             )}
             {run.autoCreate.notCreated > 0 && <p className="small muted">{t.loop.notCreated(run.autoCreate.notCreated)}</p>}

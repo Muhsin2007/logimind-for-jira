@@ -14,6 +14,16 @@ export function useIssueLinks(dataVersion: number) {
 
 export function IssueKeyLink({ link }: { link: IssueLinkView }) {
   const { t } = useI18n();
+  // The server withholds the key of an issue this person cannot see: say only that one exists.
+  if (!link.issueKey) {
+    return (
+      <span className="issue-link">
+        <span className="muted small">
+          <Icon name="link" size={14} /> {link.visibility === 'unknown' ? t.issueUnchecked : t.hiddenIssue}
+        </span>
+      </span>
+    );
+  }
   const open = () => void router.open(`/browse/${link.issueKey}`).catch(() => undefined);
   return (
     <span className="issue-link">
@@ -25,8 +35,8 @@ export function IssueKeyLink({ link }: { link: IssueLinkView }) {
         <span className={`badge status-cat-${link.status.category}`} title={t.issueCategory[link.status.category]}>
           {link.status.statusName}
         </span>
-      ) : Date.now() - new Date(link.createdAt).getTime() < 2 * 60_000 ? (
-        // Jira search indexes new issues with a short delay.
+      ) : Date.now() - new Date(link.createdAt).getTime() < 10 * 60_000 ? (
+        // Jira search indexes new issues with a short delay (same window as the server's direct check).
         <span className="muted small">{t.justCreated}</span>
       ) : (
         <span className="muted small">{t.statusUnavailable}</span>

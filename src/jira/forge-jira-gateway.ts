@@ -7,6 +7,11 @@ type ForgeResponse = Awaited<ReturnType<ReturnType<typeof api.asUser>['requestJi
 
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' };
 const SEARCH_CHUNK = 50;
+/**
+ * Upper bound on status searches per chunk of 50, splits included. Isolating k bad IDs costs about
+ * 1 + 2·k·6 searches, so this covers two per chunk; IDs left unchecked are treated as not visible.
+ */
+export const MAX_STATUS_REQUESTS = 25;
 
 /** Maps a failed Jira response to a JiraError with a user-facing message. */
 async function toJiraError(res: ForgeResponse, action: string): Promise<JiraError> {
@@ -83,27 +88,54 @@ export class ForgeJiraGateway implements JiraGateway {
 
   async getIssueStatuses(issueIds: string[]): Promise<Map<string, LiveIssue>> {
     const out = new Map<string, LiveIssue>();
-    const ids = issueIds.filter((id) => /^\d{1,18}$/.test(id)); // numeric only: safe to embed in JQL
+    const ids = [...new Set(issueIds.filter((id) => /^\d{1,18}$/.test(id)))]; // numeric only: safe to embed in JQL
     for (let i = 0; i < ids.length; i += SEARCH_CHUNK) {
-      const chunk = ids.slice(i, i + SEARCH_CHUNK);
-      const res = await this.client().requestJira(route`/rest/api/3/search/jql`, {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ jql: `id in (${chunk.join(',')})`, fields: ['status'], maxResults: SEARCH_CHUNK }),
-      });
-      if (!res.ok) throw await toJiraError(res, 'read issue statuses');
-      const body = (await res.json()) as { issues?: { id: string; key: string; fields?: { status?: RawStatus } }[] };
-      for (const issue of body.issues ?? []) {
-        const status = issue.fields?.status;
-        const category = status?.statusCategory?.key as StatusCategory | undefined;
-        out.set(issue.id, {
-          issueKey: issue.key,
-          statusName: status?.name ?? 'Unknown',
-          category: category && CATEGORIES.includes(category) ? category : 'unknown',
-        });
-      }
+      const budget = { left: MAX_STATUS_REQUESTS };
+      await this.searchStatuses(ids.slice(i, i + SEARCH_CHUNK), out, budget);
+      if (budget.left < 0) console.warn('LogiMind: issue status search budget used up; some issues are shown as not visible');
     }
     return out;
+  }
+
+  /**
+   * Jira may reject a whole `id in (...)` query with 400 when one of the issues was deleted or is
+   * hidden from the user. The chunk is then split in halves until that issue is isolated and
+   * left out, so every other issue still gets its status. The request budget bounds the splitting;
+   * IDs it leaves unchecked get no status, so they are never named (safe by default).
+   */
+  private async searchStatuses(ids: string[], out: Map<string, LiveIssue>, budget: { left: number }): Promise<void> {
+    if (budget.left <= 0) {
+      budget.left = -1; // marks the chunk as incomplete
+      return;
+    }
+    budget.left--;
+    const res = await this.client().requestJira(route`/rest/api/3/search/jql`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ jql: `id in (${ids.join(',')})`, fields: ['status'], maxResults: SEARCH_CHUNK }),
+    });
+    if (!res.ok) {
+      if (res.status !== 400) throw await toJiraError(res, 'read issue statuses');
+      if (ids.length === 1) {
+        // Deleted, or not visible to this user: no status. Logged (ID only) so a systematic rejection shows up.
+        console.warn('LogiMind: Jira rejected a status search for one issue', { issueId: ids[0], status: 400 });
+        return;
+      }
+      const mid = Math.ceil(ids.length / 2);
+      await this.searchStatuses(ids.slice(0, mid), out, budget);
+      await this.searchStatuses(ids.slice(mid), out, budget);
+      return;
+    }
+    const body = (await res.json()) as { issues?: { id: string; key: string; fields?: { status?: RawStatus } }[] };
+    for (const issue of body.issues ?? []) {
+      const status = issue.fields?.status;
+      const category = status?.statusCategory?.key as StatusCategory | undefined;
+      out.set(issue.id, {
+        issueKey: issue.key,
+        statusName: status?.name ?? 'Unknown',
+        category: category && CATEGORIES.includes(category) ? category : 'unknown',
+      });
+    }
   }
 
   async issueExists(issueId: string): Promise<'exists' | 'hidden' | 'missing'> {

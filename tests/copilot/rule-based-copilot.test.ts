@@ -11,7 +11,10 @@ import type { LogisticsRepository } from '../../src/storage/repository';
 const TODAY = '2026-11-02';
 const NOW = new Date(`${TODAY}T10:00:00Z`);
 
-function demoCopilot(opts: { shipments?: Shipment[]; inventory?: InventoryItem[]; imports?: ImportBatch[] } = {}) {
+type LinkStub = { riskId: string; issueKey: string | null; status: { statusName: string; category: string } | null };
+const VISIBLE_LINK: LinkStub = { riskId: 'LATE_SHIPMENT:SHP-1004', issueKey: 'SCRUM-5', status: { statusName: 'To Do', category: 'new' } };
+
+function demoCopilot(opts: { shipments?: Shipment[]; inventory?: InventoryItem[]; imports?: ImportBatch[]; links?: LinkStub[] } = {}) {
   const s = importCsv(demoShipmentsCsv(TODAY));
   const i = importCsv(demoInventoryCsv(TODAY));
   if (!s.ok || s.kind !== 'shipments' || !i.ok || i.kind !== 'inventory') throw new Error('demo data invalid');
@@ -28,7 +31,7 @@ function demoCopilot(opts: { shipments?: Shipment[]; inventory?: InventoryItem[]
     listLinks: vi.fn().mockResolvedValue({
       config: null,
       statusError: null,
-      links: [{ riskId: 'LATE_SHIPMENT:SHP-1004', issueKey: 'SCRUM-5', status: { statusName: 'To Do', category: 'new' } }],
+      links: opts.links ?? [VISIBLE_LINK],
     }),
   };
   return { copilot: new RuleBasedCopilot(new ServiceToolbox(logistics, issues as never)), shipmentIds: s.records.map((r) => r.id) };
@@ -43,6 +46,14 @@ describe('RuleBasedCopilot', () => {
   let ctx: ReturnType<typeof demoCopilot>;
   beforeAll(() => {
     ctx = demoCopilot();
+  });
+
+  it('says an issue exists but never names one the user cannot see', async () => {
+    const { copilot } = demoCopilot({ links: [{ riskId: 'LATE_SHIPMENT:SHP-1004', issueKey: null, status: null }] });
+    const a = await copilot.ask('What is the status of shp-1004?');
+    expect(a.facts.map((f) => f.text)).toContain('A Jira issue tracks this risk, but you cannot see it.');
+    expect(citedIds(a)).not.toContain(null);
+    expect(a.facts.some((f) => f.text.startsWith('Tracked in Jira as'))).toBe(false);
   });
 
   it('answers a shipment question from stored facts, risks and the linked Jira issue', async () => {

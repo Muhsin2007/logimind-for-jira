@@ -199,6 +199,8 @@ export const ru: Messages = {
   openInJira: 'Открыть в Jira (новая вкладка)',
   justCreated: 'только что создана — статус появится через минуту',
   statusUnavailable: 'статус недоступен (задача удалена или нет доступа)',
+  hiddenIssue: 'задача Jira, которую вы не видите (скрыта или удалена)',
+  issueUnchecked: 'задача Jira (Jira сейчас не удалось проверить)',
   jiraNotConfigured: 'Проект Jira не выбран (Импорт и настройки)',
   createIssue: 'Создать задачу в Jira',
   confirmIssue: 'Подтвердите создание задачи',

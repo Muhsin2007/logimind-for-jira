@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DailyCheckService, MANUAL_LIMITS, MAX_AUTO_ISSUES, MAX_RESOLVED_COMMENTS } from '../../src/services/daily-check-service';
+import { DailyCheckService, MANUAL_LIMITS, MAX_AUTO_ISSUES, MAX_RESOLVED_COMMENTS, namesIssues, redactRun } from '../../src/services/daily-check-service';
 import { JiraError } from '../../src/jira/jira-gateway';
 import { CheckBusyError, type CheckStore } from '../../src/storage/check-store';
 import type { RiskSnapshot } from '../../src/domain/risk-diff';
 import type { IssueLink, JiraConfig, RiskEvent, Severity } from '../../src/domain/types';
-import type { CheckRun, CreateIssueOutcome } from '../../src/shared/api';
+import type { CheckRun, CreateIssueOutcome, IssueLinkView } from '../../src/shared/api';
 
 const NOW = new Date('2026-11-09T06:00:00Z');
 const CONFIG: JiraConfig = { projectKey: 'SCRUM', projectName: 'Team', issueTypeId: '1', issueTypeName: 'Task', updatedAt: '', updatedBy: null };
@@ -253,5 +253,30 @@ describe('DailyCheckService settings and briefing', () => {
   it('returns the last run and whether auto-create is on, without account IDs', async () => {
     const ctx = setup({ autoCreate: true });
     expect(await ctx.service.getBriefing()).toEqual({ lastRun: null, autoCreate: true });
+  });
+});
+
+describe('redactRun (briefing as one viewer sees it)', () => {
+  const run = {
+    checkedAt: '2026-11-09T06:00:00Z', today: '2026-11-09', trigger: 'schedule', baseline: false,
+    counts: { open: 2, newRisks: 2, resolved: 1, stillOpen: 0, stillCritical: 0 },
+    newRisks: [], resolved: [], stillCritical: [],
+    autoCreate: { enabled: true, created: [{ riskId: 'A', issueKey: 'OPS-1' }, { riskId: 'B', issueKey: 'SECRET-2' }], notCreated: 0, error: null },
+    comments: { added: [{ riskId: 'C', issueKey: 'SECRET-3' }], error: null },
+  } as unknown as CheckRun;
+  const link = (riskId: string, issueKey: string | null) => ({ riskId, issueKey, visibility: issueKey ? 'visible' : 'hidden' }) as unknown as IssueLinkView;
+
+  it('keeps only the issue keys Jira returned to the viewer', () => {
+    const out = redactRun(run, [link('A', 'OPS-1'), link('B', null)]);
+    expect(out.autoCreate.created).toEqual([{ riskId: 'A', issueKey: 'OPS-1' }, { riskId: 'B', issueKey: null }]);
+    expect(out.comments.added).toEqual([{ riskId: 'C', issueKey: null }]);
+    expect(JSON.stringify(out)).not.toMatch(/SECRET/);
+    expect(out.counts).toEqual(run.counts);
+  });
+
+  it('withholds every key when the viewer links are unavailable, and knows when a check is needed', () => {
+    expect(JSON.stringify(redactRun(run, []))).not.toMatch(/OPS-1|SECRET/);
+    expect(namesIssues(run)).toBe(true);
+    expect(namesIssues({ ...run, autoCreate: { ...run.autoCreate, created: [] }, comments: { added: [], error: null } })).toBe(false);
   });
 });

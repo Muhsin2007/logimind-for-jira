@@ -103,10 +103,21 @@ export interface MappedImportRequest extends ImportRequest {
 }
 
 /** A link as shown to viewers: current key, live status, and no creator account ID. */
-export interface IssueLinkView extends Omit<IssueLink, 'createdBy'> {
-  /** Live Jira status; null when the issue was deleted or the viewer cannot see it. */
+export interface IssueLinkView extends Omit<IssueLink, 'createdBy' | 'issueId' | 'issueKey'> {
+  /**
+   * Null when the viewer could not be confirmed to see the issue (hidden from them, deleted, or
+   * Jira did not answer): LogiMind then only says that an issue exists, never which one.
+   */
+  issueId: string | null;
+  issueKey: string | null;
+  /** Live Jira status; null when the issue is not visible or Jira has not indexed it yet. */
   status: IssueStatus | null;
+  /** 'hidden' = Jira did not return it to the viewer; 'unknown' = Jira could not be checked right now. */
+  visibility: 'visible' | 'hidden' | 'unknown';
 }
+
+/** A link whose issue the viewer is known to see (they created it, or Jira returned it to them). */
+export type VisibleIssueLinkView = IssueLinkView & { issueId: string; issueKey: string; visibility: 'visible' };
 
 export interface IssueLinksData {
   config: JiraConfig | null;
@@ -116,7 +127,7 @@ export interface IssueLinksData {
 }
 
 export type CreateIssueOutcome =
-  | { ok: true; link: IssueLinkView }
+  | { ok: true; link: VisibleIssueLinkView }
   | {
       ok: false;
       code: 'NOT_CONFIGURED' | 'RISK_NOT_FOUND' | 'DUPLICATE' | 'BUSY' | 'LINK_FAILED' | 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'RATE_LIMITED' | 'UNKNOWN';
@@ -193,8 +204,20 @@ export interface LoopSettings {
   updatedBy: string | null;
 }
 
+/** An issue the check created or commented on; the key is null when the viewer cannot see the issue. */
+export interface BriefingIssue {
+  riskId: string;
+  issueKey: string | null;
+}
+
+/** A check run as sent to a person: as stored, except that issue keys they cannot see in Jira are withheld. */
+export type BriefingRun = Omit<CheckRun, 'autoCreate' | 'comments'> & {
+  autoCreate: Omit<CheckRun['autoCreate'], 'created'> & { created: BriefingIssue[] };
+  comments: Omit<CheckRun['comments'], 'added'> & { added: BriefingIssue[] };
+};
+
 export interface DailyBriefing {
-  lastRun: CheckRun | null;
+  lastRun: BriefingRun | null;
   autoCreate: boolean;
 }
 
@@ -255,7 +278,7 @@ export interface ResolverApi {
   getIssueContext: { payload: void; result: IssueContextData };
   askCopilot: { payload: { question: string; locale?: UiLocale }; result: CopilotAnswer };
   getDailyBriefing: { payload: void; result: DailyBriefing };
-  runDailyCheck: { payload: void; result: { ok: true; run: CheckRun } | { ok: false; code: 'BUSY'; message: string } };
+  runDailyCheck: { payload: void; result: { ok: true; run: BriefingRun } | { ok: false; code: 'BUSY'; message: string } };
   getLoopSettings: { payload: void; result: Omit<LoopSettings, 'updatedBy'> };
   saveLoopSettings: { payload: { autoCreate: boolean }; result: Omit<LoopSettings, 'updatedBy'> };
   draftFollowUp: { payload: { shipmentId: string; locale?: UiLocale }; result: FollowUpDraft | null };

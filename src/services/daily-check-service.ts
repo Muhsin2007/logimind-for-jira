@@ -2,7 +2,7 @@ import { briefList, diffRisks, toSnapshotEntries } from '../domain/risk-diff';
 import { buildResolvedComment, type AdfDoc } from '../domain/jira-issue';
 import type { IsoDate, IssueLink, JiraConfig, RiskEvent } from '../domain/types';
 import { JiraError } from '../jira/jira-gateway';
-import type { CheckRun, CreateIssueOutcome, DailyBriefing, LoopSettings } from '../shared/api';
+import type { BriefingRun, CheckRun, CreateIssueOutcome, IssueLinkView, LoopSettings } from '../shared/api';
 import type { CheckStore } from '../storage/check-store';
 
 /** Issues one scheduled check may create; further newly critical risks wait for the next check. */
@@ -76,7 +76,8 @@ export class DailyCheckService {
     return this.store.withCheckLock(() => this.store.clear());
   }
 
-  async getBriefing(): Promise<DailyBriefing> {
+  /** The stored run is unredacted: pass it through redactRun before it reaches a person. */
+  async getBriefing(): Promise<{ lastRun: CheckRun | null; autoCreate: boolean }> {
     const [lastRun, settings] = await Promise.all([this.store.getLastRun(), this.store.getSettings()]);
     return { lastRun, autoCreate: settings.autoCreate };
   }
@@ -219,4 +220,24 @@ export class DailyCheckService {
     }
     return out;
   }
+}
+
+/** True when the run names Jira issues, so the viewer's visibility must be checked before it is shown. */
+export function namesIssues(run: CheckRun): boolean {
+  return run.autoCreate.created.length > 0 || run.comments.added.length > 0;
+}
+
+/**
+ * The run as one person may see it. The check works as the app, so it can name issues the person
+ * cannot see in Jira; only keys of links Jira returned to that person (as the user) are kept.
+ */
+export function redactRun(run: CheckRun, viewerLinks: IssueLinkView[]): BriefingRun {
+  const visible = new Map<string, string>();
+  for (const l of viewerLinks) if (l.issueKey) visible.set(l.riskId, l.issueKey);
+  const view = (i: { riskId: string }) => ({ riskId: i.riskId, issueKey: visible.get(i.riskId) ?? null });
+  return {
+    ...run,
+    autoCreate: { ...run.autoCreate, created: run.autoCreate.created.map(view) },
+    comments: { ...run.comments, added: run.comments.added.map(view) },
+  };
 }

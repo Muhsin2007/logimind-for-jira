@@ -175,6 +175,8 @@ export const en = {
   openInJira: 'Open in Jira (new tab)',
   justCreated: 'just created — status appears in a moment',
   statusUnavailable: 'status unavailable (deleted or no access)',
+  hiddenIssue: 'Jira issue you cannot see (hidden or deleted)',
+  issueUnchecked: 'Jira issue (Jira could not be checked right now)',
   jiraNotConfigured: 'Jira project not configured (Import & Settings)',
   createIssue: 'Create Jira issue',
   confirmIssue: 'Confirm issue creation',

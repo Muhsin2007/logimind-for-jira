@@ -41,12 +41,17 @@ const invalid = (message: string): ActionResult => ({ ok: false, error: message,
 /** Risk IDs for stock embed the warehouse name (imported text), so they are cleaned like it. */
 const safeId = (id: string) => cleanText(id) ?? '';
 
-/** A linked issue is named only if the asking user can see it in Jira (live status found). */
+/** A linked issue is named only if the asking user can see it in Jira. */
 function issueDto(link: IssueLinkView | null) {
   if (!link) return null;
-  return link.status
-    ? { issueKey: link.issueKey, status: link.status.statusName, statusCategory: link.status.category }
-    : { exists: true, visibleToYou: false, note: 'An issue exists but you cannot see it, or Jira is still indexing it.' };
+  if (link.issueKey) {
+    return link.status
+      ? { issueKey: link.issueKey, status: link.status.statusName, statusCategory: link.status.category }
+      : { issueKey: link.issueKey, status: null, note: 'Jira has not reported a status for this issue yet.' };
+  }
+  return link.visibility === 'unknown'
+    ? { exists: true, note: 'Jira could not be checked right now, so the issue is not named. Try again later.' }
+    : { exists: true, visibleToYou: false, note: 'An issue exists but you cannot see it in Jira.' };
 }
 
 function riskDto(r: RiskEvent) {
@@ -240,6 +245,48 @@ export async function simulateDelay(tools: CopilotToolbox, payload: unknown): Pr
     })),
     untrackedLocations: r.untracked.length,
   });
+}
+
+/** Atlassian account IDs: letters, digits, ':', '_' and '-' (e.g. `557058:<uuid>` or 24 hex digits). */
+const ACCOUNT_ID = /^[A-Za-z0-9:_-]{1,128}$/;
+
+export interface Caller {
+  accountId: string;
+  /** Always Forge's invocation context (second handler argument); payload values are never trusted. */
+  source: 'principal';
+}
+
+const accountIn = (value: unknown): string | null => {
+  const id = (value as { accountId?: unknown } | null | undefined)?.accountId;
+  return typeof id === 'string' && ACCOUNT_ID.test(id) ? id : null;
+};
+
+/**
+ * The user behind a Rovo action or MCP tool call. Forge passes `(payload, context)` to the handler;
+ * `context.principal.accountId` is set by the platform (checked live for MCP calls). The payload is
+ * written by the model or the MCP client, so an accountId inside it is never trusted.
+ */
+export function callerOf(_payload: unknown, context: unknown): Caller | null {
+  const principal = accountIn((context as { principal?: unknown } | null | undefined)?.principal);
+  return principal ? { accountId: principal, source: 'principal' } : null;
+}
+
+/**
+ * Runs a read-only action for a known Atlassian user only. The account ID (no other personal data)
+ * is logged for traceability; a call without one is refused before any data is read.
+ */
+export async function asCaller(action: string, payload: unknown, context: unknown, run: () => Promise<ActionResult>): Promise<ActionResult> {
+  const caller = callerOf(payload, context);
+  if (!caller) {
+    console.warn('LogiMind action refused: no account context', { action });
+    return {
+      ok: false,
+      error: 'LogiMind answers only calls made for a signed-in Atlassian account.',
+      instruction: 'Tell the user the request could not be linked to their Atlassian account; do not answer from memory.',
+    };
+  }
+  console.log('LogiMind action', { action, accountId: caller.accountId, source: caller.source });
+  return safely(run);
 }
 
 /** Wraps an action so storage or Jira failures become a clear, non-fabricated answer. */

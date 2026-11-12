@@ -75,8 +75,14 @@ export class RuleBasedCopilot {
     for (const risk of detail.risks) {
       out.facts.push({ text: `${capitalise(risk.severity)} risk: ${risk.title}.`, ids: [risk.id] });
       const issue = await this.tools.getLinkedJiraIssue(risk.id);
-      if (issue) {
+      if (issue?.issueKey) {
         out.facts.push({ text: `Tracked in Jira as ${issue.issueKey}${issue.status ? ` (${issue.status.statusName})` : ''}.`, ids: [issue.issueKey, risk.id] });
+      } else if (issue) {
+        // Hidden from this user, or Jira did not answer: say it exists, never name it.
+        const text = issue.visibility === 'unknown'
+          ? 'A Jira issue tracks this risk; Jira could not be checked right now, so it is not named.'
+          : 'A Jira issue tracks this risk, but you cannot see it.';
+        out.facts.push({ text, ids: [risk.id] });
       }
       out.recommendations.push(...recommend(risk, { shipment: s, stock }));
     }

@@ -17,6 +17,7 @@ export const loopRu: LoopMessages = {
   autoOn: 'Автосоздание включено',
   autoOff: 'Автосоздание выключено',
   issuesCreated: 'Автоматически созданные задачи',
+  hiddenIssues: (n: number) => `(не видно вам в Jira: ${n})`,
   notCreated: (n: number) => `Новых критичных рисков без задачи: ${n}.`,
   commentsAdded: (n: number) => `Комментарий «устранено в данных» добавлен к связанным задачам: ${n}.`,
   autoForbidden: 'Приложение LogiMind не может создавать задачи в выбранном проекте. Дайте пользователю приложения («LogiMind for Jira») права Browse projects и Create issues в этом проекте или выключите автосоздание.',
@@ -35,7 +36,7 @@ export const loopRu: LoopMessages = {
   lastChanged: (when: string) => `Изменено ${when}`,
   adminOnly: 'Менять автоматизацию могут только владелец и менеджеры LogiMind.',
   lastRunErrors: 'Проблемы последней проверки',
-  askAdmin: 'Попросите администратора Jira это исправить.',
+  askAdmin: 'Попросите владельца или менеджера LogiMind это исправить.',
 
   draftButton: 'Черновик письма поставщику',
   drafting: 'Готовим черновик…',

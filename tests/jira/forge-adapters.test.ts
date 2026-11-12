@@ -7,7 +7,7 @@ vi.mock('@forge/api', () => ({
   route: (s: TemplateStringsArray, ...v: unknown[]) => String.raw({ raw: s }, ...v),
 }));
 
-import { ForgeJiraGateway } from '../../src/jira/forge-jira-gateway';
+import { ForgeJiraGateway, MAX_STATUS_REQUESTS } from '../../src/jira/forge-jira-gateway';
 import { ForgeUserDirectory } from '../../src/jira/forge-user-directory';
 import { JiraError } from '../../src/jira/jira-gateway';
 
@@ -64,6 +64,57 @@ describe('ForgeJiraGateway lookups', () => {
     requestJira.mockClear();
     await new ForgeJiraGateway().getIssueStatuses(['nope']);
     expect(requestJira).not.toHaveBeenCalled();
+  });
+
+  /** Fake Jira search: 400 whenever the JQL names a "bad" (deleted or hidden) ID, else the good ones. */
+  const searchWithBadIds = (bad: Set<string>) => async (_route: string, init: { body: string }) => {
+    const ids = (JSON.parse(init.body).jql as string).replace(/^id in \(|\)$/g, '').split(',');
+    if (ids.some((id) => bad.has(id))) return res(400, { errorMessages: ["An issue with key '…' does not exist for field 'id'."] });
+    return res(200, { issues: ids.map((id) => ({ id, key: `OPS-${id}`, fields: { status: { name: 'To Do', statusCategory: { key: 'new' } } } })) });
+  };
+
+  it('keeps the statuses of the other issues when one issue in a chunk is deleted or hidden', async () => {
+    requestJira.mockImplementation(searchWithBadIds(new Set(['17'])));
+    const ids = Array.from({ length: 50 }, (_, i) => String(i + 1));
+    const out = await new ForgeJiraGateway().getIssueStatuses(ids);
+    expect(out.size).toBe(49);
+    expect(out.has('17')).toBe(false);
+    expect(out.get('18')).toEqual({ issueKey: 'OPS-18', statusName: 'To Do', category: 'new' });
+    // Halving isolates one bad ID in 50 in a bounded number of searches.
+    expect(requestJira.mock.calls.length).toBeLessThanOrEqual(13);
+  });
+
+  it('handles several bad IDs across chunks and drops duplicates', async () => {
+    requestJira.mockImplementation(searchWithBadIds(new Set(['3', '60', '61'])));
+    const ids = [...Array.from({ length: 70 }, (_, i) => String(i + 1)), '5', '5'];
+    const out = await new ForgeJiraGateway().getIssueStatuses(ids);
+    expect([...out.keys()].sort((a, b) => Number(a) - Number(b))).toEqual(Array.from({ length: 70 }, (_, i) => String(i + 1)).filter((id) => !['3', '60', '61'].includes(id)));
+  });
+
+  it('does not split on other errors, and stops at the request budget', async () => {
+    requestJira.mockResolvedValue(res(429));
+    await expect(new ForgeJiraGateway().getIssueStatuses(['1', '2'])).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    expect(requestJira).toHaveBeenCalledTimes(1);
+    requestJira.mockReset();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    requestJira.mockResolvedValue(res(400));
+    const many = Array.from({ length: 200 }, (_, i) => String(i + 1));
+    // Each chunk of 50 has its own budget; a used-up budget leaves IDs unnamed instead of failing.
+    expect((await new ForgeJiraGateway().getIssueStatuses(many)).size).toBe(0);
+    expect(requestJira).toHaveBeenCalledTimes(4 * MAX_STATUS_REQUESTS);
+    expect(warn).toHaveBeenCalledWith('LogiMind: issue status search budget used up; some issues are shown as not visible');
+    warn.mockRestore();
+  });
+
+  it('keeps the statuses of good chunks when another chunk runs out of budget', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // Five bad IDs spread through the second chunk use up its budget; the first chunk is untouched.
+    requestJira.mockImplementation(searchWithBadIds(new Set(['52', '62', '72', '82', '92'])));
+    const out = await new ForgeJiraGateway().getIssueStatuses(Array.from({ length: 100 }, (_, i) => String(i + 1)));
+    for (let id = 1; id <= 50; id++) expect(out.has(String(id))).toBe(true);
+    expect(out.has('52')).toBe(false);
+    expect(warn).toHaveBeenCalledWith('LogiMind: Jira rejected a status search for one issue', { issueId: expect.any(String), status: 400 });
+    warn.mockRestore();
   });
 
   it('maps status categories defensively', async () => {

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { buildIssueContent } from '../domain/jira-issue';
 import type { IssueLink, JiraConfig, LiveIssue, RiskEvent } from '../domain/types';
 import { JiraError, type JiraGateway, type JiraIssueType, type JiraProject } from '../jira/jira-gateway';
-import type { CreateIssueOutcome, IssueContextData, IssueLinksData, IssueLinkView } from '../shared/api';
+import type { CreateIssueOutcome, IssueContextData, IssueLinksData, IssueLinkView, VisibleIssueLinkView } from '../shared/api';
 import { RiskBusyError, type IssueLinkRepository } from '../storage/issue-links';
 import type { LogisticsService } from './logistics-service';
 
@@ -10,6 +10,9 @@ import type { LogisticsService } from './logistics-service';
 export const ISSUE_ID = /^\d{1,18}$/;
 const PROJECT_KEY = /^[A-Z][A-Z0-9_]{0,19}$/;
 const LINK_SAVE_ATTEMPTS = 3;
+/** Links younger than this that the status search did not return are checked one by one. */
+const RECENT_LINK_MS = 10 * 60_000;
+const MAX_RECENT_CHECKS = 5;
 
 type RiskSource = Pick<LogisticsService, 'listRisks' | 'getShipment'>;
 
@@ -24,6 +27,11 @@ export class IssueService {
     private readonly links: IssueLinkRepository,
     private readonly jira: JiraGateway,
     private readonly now: () => Date = () => new Date(),
+    /**
+     * Jira Cloud answers 404 both for a deleted issue and for one the user may not browse. Before a
+     * user replaces a link after a 404, the app re-checks the issue so a hidden one is never overwritten.
+     */
+    private readonly appJira?: Pick<JiraGateway, 'issueExists'>,
   ) {}
 
   getConfig(): Promise<JiraConfig | null> {
@@ -58,22 +66,45 @@ export class IssueService {
   }
 
   /**
-   * All links with live Jira key and status, looked up by issue ID as the viewer. A status
-   * lookup failure never hides the links. Who created each issue is not sent to viewers.
+   * All links, with live Jira key and status looked up by issue ID as the viewer. An issue's key
+   * is sent only when the viewer can see that issue; otherwise the link says "an issue exists"
+   * without naming it. A status lookup failure never hides the links themselves. Who created
+   * each issue is not sent to viewers.
    */
   async listLinks(): Promise<IssueLinksData> {
     const [config, links] = await Promise.all([this.links.getConfig(), this.links.listLinks()]);
     let live = new Map<string, LiveIssue>();
     let statusError: string | null = null;
     const ids = links.map((l) => l.issueId).filter((id) => ISSUE_ID.test(id));
+    const visible = new Set<string>();
     if (ids.length > 0) {
       try {
         live = await this.jira.getIssueStatuses(ids);
+        for (const id of live.keys()) visible.add(id);
+        await this.confirmRecent(links, visible);
       } catch (err) {
         statusError = err instanceof Error ? err.message : 'Could not read issue statuses';
       }
     }
-    return { config, statusError, links: links.map((l) => toView(l, live.get(l.issueId) ?? null)) };
+    // After a failed lookup the viewer is told Jira could not be checked, not that the issue is hidden.
+    const notVisible = statusError ? ('unknown' as const) : ('hidden' as const);
+    return { config, statusError, links: links.map((l) => (visible.has(l.issueId) ? visibleView(l, live.get(l.issueId) ?? null) : hiddenView(l, notVisible))) };
+  }
+
+  /**
+   * Jira search indexes a new issue with a short delay, so a just-created issue can be missing
+   * from the status search. Those few are checked directly, as the viewer.
+   */
+  private async confirmRecent(links: IssueLink[], visible: Set<string>): Promise<void> {
+    const since = this.now().getTime() - RECENT_LINK_MS;
+    const recent = links
+      .filter((l) => ISSUE_ID.test(l.issueId) && !visible.has(l.issueId) && new Date(l.createdAt).getTime() >= since)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)) // newest first
+      .slice(0, MAX_RECENT_CHECKS);
+    const states = await Promise.all(recent.map((l) => this.jira.issueExists(l.issueId).catch(() => 'hidden' as const)));
+    recent.forEach((l, i) => {
+      if (states[i] === 'exists') visible.add(l.issueId);
+    });
   }
 
   /**
@@ -84,7 +115,7 @@ export class IssueService {
   async createIssueForRisk(riskId: string, createdBy: string | null, activeRisks?: RiskEvent[]): Promise<CreateIssueOutcome> {
     const config = await this.links.getConfig();
     if (!config) {
-      return { ok: false, code: 'NOT_CONFIGURED', message: 'A Jira administrator must choose a project for LogiMind issues in Import & Settings.' };
+      return { ok: false, code: 'NOT_CONFIGURED', message: 'The LogiMind owner or a manager must choose a project for LogiMind issues in Import & Settings.' };
     }
     const risk = (activeRisks ?? (await this.logistics.listRisks()).risks).find((r) => r.id === riskId);
     if (!risk) {
@@ -95,9 +126,12 @@ export class IssueService {
       return await this.links.withRiskLock(riskId, async (): Promise<CreateIssueOutcome> => {
         const existing = await this.links.getLink(riskId);
         if (existing) {
-          const state = await this.jira.issueExists(existing.issueId);
+          let state = await this.jira.issueExists(existing.issueId);
+          if (state === 'missing' && this.appJira && (await this.appJira.issueExists(existing.issueId)) !== 'missing') {
+            state = 'hidden';
+          }
           if (state === 'exists') {
-            return { ok: false, code: 'DUPLICATE', message: `Issue ${existing.issueKey} already tracks this risk.`, link: toView(existing, null) };
+            return { ok: false, code: 'DUPLICATE', message: `Issue ${existing.issueKey} already tracks this risk.`, link: visibleView(existing, null) };
           }
           if (state === 'hidden') {
             return { ok: false, code: 'DUPLICATE', message: 'An issue you do not have access to already tracks this risk.' };
@@ -114,7 +148,7 @@ export class IssueService {
             message: `Created ${created.key}, but LogiMind could not record the link. Do not create it again; the issue carries the label ${riskLabel(risk.id)}.`,
           };
         }
-        return { ok: true, link: toView(link, null) };
+        return { ok: true, link: visibleView(link, null) };
       });
     } catch (err) {
       if (err instanceof RiskBusyError) return { ok: false, code: 'BUSY', message: err.message };
@@ -131,7 +165,7 @@ export class IssueService {
       this.logistics.listRisks(),
       link.entityType === 'shipment' ? this.logistics.getShipment(link.entityKey) : Promise.resolve(null),
     ]);
-    return { issueKey, link: { ...toView(link, null), issueKey }, currentRisk: risks.find((r) => r.id === link.riskId) ?? null, shipment };
+    return { issueKey, link: { ...visibleView(link, null), issueKey }, currentRisk: risks.find((r) => r.id === link.riskId) ?? null, shipment };
   }
 
   clearLinks(): Promise<void> {
@@ -151,13 +185,21 @@ export class IssueService {
   }
 }
 
-function toView(link: IssueLink, live: LiveIssue | null): IssueLinkView {
+/** For an issue the viewer is known to see. */
+function visibleView(link: IssueLink, live: LiveIssue | null): VisibleIssueLinkView {
   const { createdBy: _createdBy, ...rest } = link;
   return {
     ...rest,
     issueKey: live?.issueKey ?? link.issueKey,
     status: live ? { statusName: live.statusName, category: live.category } : null,
+    visibility: 'visible',
   };
+}
+
+/** For an issue the viewer may not see: the link stays, its issue ID and key are withheld. */
+function hiddenView(link: IssueLink, visibility: 'hidden' | 'unknown'): IssueLinkView {
+  const { createdBy: _createdBy, ...rest } = link;
+  return { ...rest, issueId: null, issueKey: null, status: null, visibility };
 }
 
 function toLink(risk: RiskEvent, issue: { id: string; key: string }, projectKey: string, createdAt: string, createdBy: string | null): IssueLink {

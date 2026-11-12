@@ -94,6 +94,19 @@ describe('IssueService.createIssueForRisk', () => {
     expect(await ctx.service.createIssueForRisk(RISK.id, 'u1')).toMatchObject({ ok: true, link: { issueKey: 'SCRUM-8' } });
   });
 
+  it('does not overwrite a link when the user gets 404 but the app still finds the issue', async () => {
+    ctx = setup({ existing: EXISTING });
+    ctx.jira.issueExists.mockResolvedValue('missing');
+    const appJira = { issueExists: vi.fn().mockResolvedValue('exists') };
+    const service = new IssueService(ctx.logistics, ctx.links, ctx.jira, () => NOW, appJira);
+    const out = await service.createIssueForRisk(RISK.id, 'u1');
+    expect(out).toEqual({ ok: false, code: 'DUPLICATE', message: 'An issue you do not have access to already tracks this risk.' });
+    expect(appJira.issueExists).toHaveBeenCalledWith(EXISTING.issueId);
+    expect(ctx.jira.createIssue).not.toHaveBeenCalled();
+    appJira.issueExists.mockResolvedValue('missing');
+    expect(await service.createIssueForRisk(RISK.id, 'u1')).toMatchObject({ ok: true, link: { issueKey: 'SCRUM-8' } });
+  });
+
   it('requires a configured project and an active risk', async () => {
     expect(await setup({ config: null }).service.createIssueForRisk(RISK.id, null)).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' });
     const noRisk = setup({ risks: [] });
@@ -124,7 +137,38 @@ describe('IssueService links and settings', () => {
     expect(ctx.jira.getIssueStatuses).toHaveBeenCalledWith(['100']);
     ctx.jira.getIssueStatuses.mockRejectedValue(new JiraError('RATE_LIMITED', 'slow down'));
     const out = await ctx.service.listLinks();
-    expect(out).toMatchObject({ statusError: 'slow down', links: [{ issueKey: 'SCRUM-7', status: null }] });
+    // Visibility could not be confirmed, so the link stays but its issue is not named.
+    expect(out).toMatchObject({ statusError: 'slow down', links: [{ riskId: RISK.id, issueId: null, issueKey: null, status: null, visibility: 'unknown' }] });
+  });
+
+  it('withholds the key of an issue the viewer cannot see, and names the ones they can', async () => {
+    const OLD = new Date(NOW.getTime() - 60 * 60_000).toISOString();
+    const hidden: IssueLink = { ...EXISTING, riskId: 'LOW_STOCK:SKU-9@Main', issueId: '300', issueKey: 'SECRET-1', createdAt: OLD };
+    const ctx = setup({ existing: { ...EXISTING, createdAt: OLD } });
+    ctx.links.listLinks.mockResolvedValue([{ ...EXISTING, createdAt: OLD }, hidden]);
+    const out = await ctx.service.listLinks();
+    expect(out.statusError).toBeNull();
+    expect(out.links[0]).toMatchObject({ issueId: '100', issueKey: 'OPS-3', status: { statusName: 'In Progress' } });
+    expect(out.links[1]).toMatchObject({ riskId: hidden.riskId, issueId: null, issueKey: null, status: null });
+    expect(JSON.stringify(out)).not.toContain('SECRET-1');
+    // Old links missing from the search are not re-checked one by one.
+    expect(ctx.jira.issueExists).not.toHaveBeenCalled();
+  });
+
+  it('checks a just-created issue directly when Jira search has not indexed it yet', async () => {
+    const fresh: IssueLink = { ...EXISTING, riskId: 'MISSING_ETA:SHP-2', issueId: '400', issueKey: 'SCRUM-9', createdAt: NOW.toISOString() };
+    const hiddenFresh: IssueLink = { ...fresh, riskId: 'MISSING_ETA:SHP-3', issueId: '401', issueKey: 'SECRET-2' };
+    const ctx = setup();
+    ctx.links.listLinks.mockResolvedValue([fresh, hiddenFresh]);
+    ctx.jira.getIssueStatuses.mockResolvedValue(new Map());
+    ctx.jira.issueExists.mockImplementation(async (id: string) => (id === '400' ? 'exists' : 'hidden'));
+    const out = await ctx.service.listLinks();
+    expect(out.links[0]).toMatchObject({ issueId: '400', issueKey: 'SCRUM-9', status: null });
+    expect(out.links[1]).toMatchObject({ issueId: null, issueKey: null });
+    expect(ctx.jira.issueExists).toHaveBeenCalledTimes(2);
+    // A failing direct check counts as not visible.
+    ctx.jira.issueExists.mockRejectedValue(new JiraError('UNKNOWN', 'boom'));
+    expect((await ctx.service.listLinks()).links.every((l) => l.issueKey === null)).toBe(true);
   });
 
   it('only saves a project and issue type the user can actually use', async () => {

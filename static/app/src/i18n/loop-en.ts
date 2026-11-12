@@ -18,6 +18,7 @@ export const loopEn = {
   autoOn: 'Auto-create on',
   autoOff: 'Auto-create off',
   issuesCreated: 'Issues created automatically',
+  hiddenIssues: (n: number) => `(${n} you cannot see in Jira)`,
   notCreated: (n: number) => `${n} newly critical ${n === 1 ? 'risk has' : 'risks have'} no issue yet.`,
   commentsAdded: (n: number) => `"Resolved in data" comment added to ${n} linked ${n === 1 ? 'issue' : 'issues'}.`,
   autoForbidden: 'The LogiMind app cannot create issues in the chosen project. Give the app\'s user ("LogiMind for Jira") the Browse projects and Create issues permissions there, or turn auto-create off.',
@@ -36,7 +37,7 @@ export const loopEn = {
   lastChanged: (when: string) => `Changed ${when}`,
   adminOnly: 'Only the LogiMind owner and managers can change automation.',
   lastRunErrors: 'Problems in the last check',
-  askAdmin: 'Ask a Jira administrator to fix this.',
+  askAdmin: 'Ask the LogiMind owner or a manager to fix this.',
 
   draftButton: 'Draft supplier follow-up',
   drafting: 'Drafting…',

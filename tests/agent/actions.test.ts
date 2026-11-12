@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanText, DATA_NOTICE, getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from '../../src/agent/actions';
+import { asCaller, callerOf, cleanText, DATA_NOTICE, getInventory, getLinkedJiraIssue, getRiskSummary, getShipment, safely, simulateDelay } from '../../src/agent/actions';
 import { ServiceToolbox } from '../../src/copilot/tools';
 import { demoInventoryCsv, demoShipmentsCsv } from '../../src/domain/demo-data';
 import { importCsv } from '../../src/domain/importer';
@@ -122,10 +122,16 @@ describe('Rovo actions', () => {
 
   it('never names an issue the user cannot see', async () => {
     const tools = demoTools();
-    vi.spyOn(tools, 'getLinkedJiraIssue').mockResolvedValue({ riskId: 'LATE_SHIPMENT:SHP-1004', issueKey: 'SECRET-1', status: null } as never);
+    // The issue service withholds the key of an issue the viewer cannot see.
+    const spy = vi.spyOn(tools, 'getLinkedJiraIssue').mockResolvedValue({ riskId: 'LATE_SHIPMENT:SHP-1004', issueId: null, issueKey: null, status: null, visibility: 'hidden' } as never);
     const out = await getLinkedJiraIssue(tools, { riskId: 'LATE_SHIPMENT:SHP-1004' });
     expect(out).toMatchObject({ found: true, issue: { exists: true, visibleToYou: false } });
     expect(JSON.stringify(out)).not.toContain('SECRET-1');
+    // When Jira could not be checked, the answer says so instead of claiming the issue is hidden.
+    spy.mockResolvedValue({ riskId: 'LATE_SHIPMENT:SHP-1004', issueId: null, issueKey: null, status: null, visibility: 'unknown' } as never);
+    const unknown = await getLinkedJiraIssue(tools, { riskId: 'LATE_SHIPMENT:SHP-1004' });
+    expect(JSON.stringify(unknown)).toMatch(/could not be checked/);
+    expect(JSON.stringify(unknown)).not.toContain('visibleToYou');
   });
 
   it('does not pass raw Jira or storage error text to the caller (MCP clients are external)', async () => {
@@ -144,5 +150,59 @@ describe('Rovo actions', () => {
   it('turns failures into an explicit "data unavailable" answer', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(await safely(() => Promise.reject(new Error('kvs down')))).toMatchObject({ ok: false, error: 'LogiMind could not read its data right now.' });
+  });
+});
+
+describe('Rovo / MCP caller account', () => {
+  const ACCOUNT = '712020:0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0';
+
+  it("reads the account only from Forge's invocation context, never from the payload", () => {
+    expect(callerOf({}, { principal: { accountId: ACCOUNT } })).toEqual({ accountId: ACCOUNT, source: 'principal' });
+    // An MCP client or the model writes the payload, so an accountId there could be forged.
+    expect(callerOf({ context: { accountId: ACCOUNT } }, {})).toBeNull();
+    expect(callerOf({ accountId: ACCOUNT }, undefined)).toBeNull();
+    // The invocation context wins over anything in the payload.
+    expect(callerOf({ context: { accountId: 'other' } }, { principal: { accountId: ACCOUNT } })).toEqual({ accountId: ACCOUNT, source: 'principal' });
+  });
+
+  it('finds no caller when there is no account, or a malformed one', () => {
+    for (const [payload, context] of [
+      [undefined, undefined],
+      [{}, {}],
+      [{ context: {} }, { principal: {} }],
+      [{ accountId: ACCOUNT }, {}], // a top-level input is model-supplied, never trusted
+      [{ context: { accountId: '' } }, {}],
+      [{ context: { accountId: 'x'.repeat(200) } }, {}],
+      [{ context: { accountId: 'a b; drop' } }, {}],
+      [{}, { principal: { accountId: 42 } }],
+    ] as const) {
+      expect(callerOf(payload, context)).toBeNull();
+    }
+  });
+
+  it('refuses a call without an account and never runs the action', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const run = vi.fn(async () => ({ ok: true }));
+    const out = await asCaller('get-risk-summary', {}, {}, run);
+    expect(out).toMatchObject({ ok: false });
+    expect(String(out.error)).toMatch(/signed-in Atlassian account/);
+    expect(run).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith('LogiMind action refused: no account context', { action: 'get-risk-summary' });
+    // An account ID supplied only in the payload is refused too.
+    expect(await asCaller('get-risk-summary', { context: { accountId: ACCOUNT } }, {}, run)).toMatchObject({ ok: false });
+    expect(run).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('logs only the action, the account ID and where it came from, then runs the action safely', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const payload = { shipmentId: 'SHP-1004', context: { cloudId: 'c', jira: { issueKey: 'X-1' } } };
+    expect(await asCaller('get-shipment', payload, { principal: { accountId: ACCOUNT } }, async () => ({ ok: true, found: true }))).toEqual({ ok: true, found: true });
+    expect(log).toHaveBeenCalledWith('LogiMind action', { action: 'get-shipment', accountId: ACCOUNT, source: 'principal' });
+    expect(JSON.stringify(log.mock.calls)).not.toContain('SHP-1004');
+    expect(await asCaller('get-shipment', payload, { principal: { accountId: ACCOUNT } }, () => Promise.reject(new Error('kvs down')))).toMatchObject({ ok: false });
+    log.mockRestore();
+    err.mockRestore();
   });
 });
